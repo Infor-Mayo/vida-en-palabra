@@ -59,19 +59,15 @@ const RESPONSE_SCHEMA = (numQuestions: number) => ({
 });
 
 const getOpenRouterKey = () => {
-  // Priorizamos exactamente el nombre que configuró el usuario
-  return process.env.OpenRouter_API_KEY || process.env.OPENROUTER_API_KEY;
-};
-
-const getGeminiKey = () => {
-  return process.env.API_KEY;
+  // Obtenemos la clave de OpenRouter desde la variable de entorno
+  return process.env.OpenRouter_API_KEY;
 };
 
 const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
   const apiKey = getOpenRouterKey();
   
   if (!apiKey) {
-    throw new Error("No se encontró la clave OpenRouter_API_KEY configurada.");
+    throw new Error("No se encontró la clave 'OpenRouter_API_KEY' en el entorno.");
   }
 
   const response = await fetch(OPENROUTER_URL, {
@@ -91,7 +87,7 @@ const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `Error ${response.status} en Gemma.`);
+    throw new Error(errorData.error?.message || `Error ${response.status} en el motor de OpenRouter.`);
   }
 
   const data = await response.json();
@@ -99,14 +95,13 @@ const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
   return JSON.parse(content);
 };
 
+// Fix: Always use {apiKey: process.env.API_KEY} directly when initializing GoogleGenAI right before generating content.
 const fetchFromGeminiDirect = async (prompt: string, numQuestions: number): Promise<any> => {
-  const apiKey = getGeminiKey();
-  
-  if (!apiKey) {
-    throw new Error("No se encontró la clave API_KEY de Gemini.");
+  if (!process.env.API_KEY) {
+    throw new Error("No se encontró la clave 'API_KEY' de Gemini en el entorno.");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: prompt,
@@ -118,7 +113,7 @@ const fetchFromGeminiDirect = async (prompt: string, numQuestions: number): Prom
     }
   });
   
-  if (!response.text) throw new Error("La IA de Gemini no devolvió una respuesta válida.");
+  if (!response.text) throw new Error("Gemini no devolvió una respuesta válida.");
   return JSON.parse(response.text);
 };
 
@@ -164,7 +159,9 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration,
 
   try {
     if (provider === 'gemini') {
-      const ai = new GoogleGenAI({ apiKey: getGeminiKey() || "" });
+      // Fix: Always use {apiKey: process.env.API_KEY} directly and initialize right before use.
+      if (!process.env.API_KEY) throw new Error("No se encontró la clave API_KEY.");
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: prompt,
