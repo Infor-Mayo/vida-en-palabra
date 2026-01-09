@@ -8,20 +8,17 @@ export const generateDevotional = async (passage: string, numQuestions: number =
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Realiza un estudio exegético y pedagógico exhaustivo sobre el pasaje: "${passage}".`,
+      contents: `Proporciona un análisis literario, histórico y espiritual profundo de: "${passage}".`,
       config: {
         thinkingConfig: { thinkingBudget: 15000 },
-        systemInstruction: `Eres un experto en Estudios Bíblicos, Hermenéutica y Pedagogía. Tu objetivo es transformar una referencia bíblica en un estudio interactivo de alto nivel en español.
+        systemInstruction: `Eres un asistente de estudios bíblicos académico y pedagógico. 
+Tu tarea es convertir una referencia bíblica en un material de estudio interactivo en español.
 
-PAUTAS DE COMPORTAMIENTO:
-1. Adopta un tono puramente académico, histórico y de reflexión espiritual constructiva. 
-2. Si el pasaje trata sobre temas difíciles (como Job 1, sufrimientos o conflictos), analízalos desde una perspectiva literaria y de contexto histórico, enfocándote en las lecciones de resiliencia, sabiduría y estructura del texto.
-3. NO generes contenido que incite al odio o a la desesperanza. Enfócate en la enseñanza y el aprendizaje.
-4. OBLIGATORIO: Recupera el texto completo de los versículos en la propiedad 'passageText'. No resumas el texto sagrado ahí, escríbelo íntegramente.
-5. Genera exactamente ${numQuestions} preguntas variadas para el cuestionario (quiz) que incluyan los tipos: multiple-choice, matching, ordering, fill-in-the-blanks y open-ended.
-
-FORMATO DE SALIDA:
-Entrega exclusivamente un objeto JSON válido. No incluyas advertencias, notas al pie ni introducciones fuera del JSON.`,
+PAUTAS CRÍTICAS:
+1. TRATAMIENTO DE TEMAS DIFÍCILES: Si el pasaje incluye sufrimiento, pérdida o conflicto (como Job 1), trátalo desde una perspectiva de "Resiliencia Humana", "Análisis Literario de la Sabiduría" y "Lecciones Teológicas de Integridad". Evita el lenguaje truculento y enfócate en la enseñanza pedagógica.
+2. TEXTO COMPLETO: Es obligatorio que la propiedad 'passageText' contenga el texto completo de los versículos solicitados.
+3. CUESTIONARIO: Genera exactamente ${numQuestions} preguntas variadas (opción múltiple, completar, ordenar).
+4. El resultado DEBE ser un JSON válido. No incluyas texto fuera del objeto JSON.`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -79,28 +76,16 @@ Entrega exclusivamente un objeto JSON válido. No incluyas advertencias, notas a
       }
     });
 
-    const candidate = response.candidates?.[0];
     const text = response.text;
-
-    if (!text || text.trim().length === 0) {
-      if (candidate?.finishReason === 'SAFETY') {
-        throw new Error("El sistema de seguridad ha declinado la respuesta por la naturaleza sensible del pasaje. Prueba solicitando un análisis puramente histórico.");
-      }
-      throw new Error("La IA no pudo procesar este pasaje en este momento. Intenta con una referencia más corta o específica.");
-    }
-
-    try {
-      return JSON.parse(text) as DevotionalData;
-    } catch (parseError) {
-      console.error("Error al parsear el JSON de la IA:", text);
-      throw new Error("El estudio se generó con errores de formato. Por favor, reintenta.");
-    }
+    if (!text) throw new Error("La IA no devolvió contenido.");
+    
+    return JSON.parse(text) as DevotionalData;
   } catch (error: any) {
     console.error("Error en generateDevotional:", error);
-    if (error.message?.includes("Rpc failed") || error.message?.includes("xhr")) {
-      throw new Error("Error de conexión. Por favor, comprueba tu internet e intenta de nuevo.");
+    if (error.message?.includes("SAFETY")) {
+      throw new Error("El sistema de seguridad ha declinado la respuesta por la naturaleza del pasaje. Prueba con una referencia más específica.");
     }
-    throw error;
+    throw new Error("No se pudo generar el estudio. Intenta de nuevo en unos momentos.");
   }
 };
 
@@ -110,10 +95,8 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration)
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Crea un itinerario de lectura bíblica profundo sobre: "${topic}" con una duración: ${duration}.`,
+      contents: `Crea un itinerario de lectura para el tema: "${topic}" con duración: ${duration}.`,
       config: {
-        thinkingConfig: { thinkingBudget: 4000 },
-        systemInstruction: "Eres un mentor espiritual. Diseña planes de lectura que conecten pasajes del Antiguo y Nuevo Testamento para un crecimiento integral.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -141,10 +124,9 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration)
     });
 
     const text = response.text;
-    if (!text) throw new Error("No se pudo obtener el plan de lectura.");
     return JSON.parse(text) as ReadingPlan;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error en generateReadingPlan:", error);
-    throw new Error("Error al generar el plan. Intenta con otro tema.");
+    throw new Error("Error al diseñar el plan de lectura.");
   }
 };
