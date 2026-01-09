@@ -11,7 +11,7 @@ PAUTAS CRÍTICAS:
 1. TRATAMIENTO DE TEMAS DIFÍCILES: Si el pasaje incluye sufrimiento o conflicto, trátalo desde la resiliencia y la sabiduría literaria.
 2. TEXTO COMPLETO: La propiedad 'passageText' DEBE tener los versículos completos del pasaje solicitado.
 3. CUESTIONARIO: Genera exactamente ${numQuestions} preguntas variadas (múltiple, completar, ordenar, emparejar).
-4. El resultado DEBE ser un JSON válido.`;
+4. El resultado DEBE ser un JSON puro. No incluyas explicaciones fuera del JSON.`;
 
 const RESPONSE_SCHEMA = (numQuestions: number) => ({
   type: Type.OBJECT,
@@ -58,127 +58,136 @@ const RESPONSE_SCHEMA = (numQuestions: number) => ({
   required: ["title", "passageText", "summary", "historicalContext", "keyVerses", "quiz", "reflectionPrompts", "practicalApplication", "dailyPlan"]
 });
 
-const getOpenRouterKey = () => {
-  // Obtenemos la clave de OpenRouter desde la variable de entorno
-  return process.env.OpenRouter_API_KEY;
+const cleanJsonResponse = (rawText: string): any => {
+  // Intenta encontrar el primer '{' y el último '}' para extraer solo el JSON
+  const startIdx = rawText.indexOf('{');
+  const endIdx = rawText.lastIndexOf('}');
+  
+  if (startIdx === -1 || endIdx === -1) {
+    throw new Error("La IA no devolvió un formato de datos válido. Intenta con un pasaje diferente.");
+  }
+  
+  const jsonStr = rawText.substring(startIdx, endIdx + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("Error parseando JSON:", jsonStr);
+    throw new Error("Error de formato en la respuesta. Por favor, intenta de nuevo.");
+  }
 };
 
 const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
-  const apiKey = getOpenRouterKey();
+  const apiKey = process.env.OpenRouter_API_KEY || "";
   
   if (!apiKey) {
-    throw new Error("No se encontró la clave 'OpenRouter_API_KEY' en el entorno.");
+    throw new Error("La clave de OpenRouter no está configurada. Por favor, usa Gemini o configura la clave.");
   }
 
-  const response = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "Vida en la Palabra",
-    },
-    body: JSON.stringify({
-      model: "google/gemma-3-27b-it:free",
-      messages: messages,
-      response_format: { type: "json_object" }
-    }),
-  });
+  try {
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "Vida Palabra App",
+      },
+      body: JSON.stringify({
+        model: "google/gemma-3-27b-it:free",
+        messages: messages,
+        response_format: { type: "json_object" },
+        temperature: 0.7
+      }),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `Error ${response.status} en el motor de OpenRouter.`);
-  }
-
-  const data = await response.json();
-  const content = data.choices[0].message.content;
-  return JSON.parse(content);
-};
-
-// Fix: Always use {apiKey: process.env.API_KEY} directly when initializing GoogleGenAI right before generating content.
-const fetchFromGeminiDirect = async (prompt: string, numQuestions: number): Promise<any> => {
-  if (!process.env.API_KEY) {
-    throw new Error("No se encontró la clave 'API_KEY' de Gemini en el entorno.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION(numQuestions),
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA(numQuestions),
-      thinkingConfig: { thinkingBudget: 15000 }
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.error?.message || `Error del servidor (Código ${response.status})`);
     }
-  });
-  
-  if (!response.text) throw new Error("Gemini no devolvió una respuesta válida.");
-  return JSON.parse(response.text);
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    
+    if (!content) throw new Error("No se recibió contenido del modelo Gemma.");
+    return cleanJsonResponse(content);
+  } catch (error: any) {
+    throw new Error(`Error en Gemma: ${error.message}`);
+  }
 };
 
 export const generateDevotional = async (passage: string, provider: AIProvider, numQuestions: number = 10): Promise<DevotionalData> => {
-  try {
-    if (provider === 'gemini') {
-      return await fetchFromGeminiDirect(`Analiza profundamente el pasaje: "${passage}"`, numQuestions) as DevotionalData;
-    } else {
-      const messages = [
-        { role: "system", content: SYSTEM_INSTRUCTION(numQuestions) },
-        { role: "user", content: `Analiza profundamente el pasaje: "${passage}"` }
-      ];
-      return await fetchFromOpenRouter(messages) as DevotionalData;
+  if (provider === 'gemini') {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Usamos el modelo Flash de Gemini 3 que es rápido y gratuito
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [{ parts: [{ text: `Analiza este pasaje bíblico para un devocional: "${passage}"` }] }],
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION(numQuestions),
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA(numQuestions)
+        }
+      });
+      
+      const text = response.text;
+      if (!text) throw new Error("Gemini no devolvió texto.");
+      return cleanJsonResponse(text);
+    } catch (error: any) {
+      throw new Error(`Error en Gemini: ${error.message}`);
     }
-  } catch (error: any) {
-    console.error("Error en generateDevotional:", error);
-    throw new Error(error.message || "Error al conectar con el servicio de IA.");
+  } else {
+    const messages = [
+      { role: "system", content: SYSTEM_INSTRUCTION(numQuestions) },
+      { role: "user", content: `Analiza este pasaje bíblico para un devocional: "${passage}"` }
+    ];
+    return await fetchFromOpenRouter(messages);
   }
 };
 
 export const generateReadingPlan = async (topic: string, duration: PlanDuration, provider: AIProvider): Promise<ReadingPlan> => {
-  const prompt = `Crea un itinerario de lectura bíblica para el tema "${topic}" con duración "${duration}" en formato JSON.`;
-  const schema = {
-    type: Type.OBJECT,
-    properties: {
-      title: { type: Type.STRING },
-      description: { type: Type.STRING },
-      duration: { type: Type.STRING },
-      items: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            passage: { type: Type.STRING },
-            theme: { type: Type.STRING },
-            reason: { type: Type.STRING }
-          }
-        }
-      }
-    }
-  };
-
-  try {
-    if (provider === 'gemini') {
-      // Fix: Always use {apiKey: process.env.API_KEY} directly and initialize right before use.
-      if (!process.env.API_KEY) throw new Error("No se encontró la clave API_KEY.");
+  const prompt = `Crea un itinerario de lectura bíblica para el tema "${topic}" durante "${duration}". Responde SOLO en JSON con title, description, duration e items (cada item con id, passage, theme, reason).`;
+  
+  if (provider === 'gemini') {
+    try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
+        model: 'gemini-3-flash-preview',
+        contents: [{ parts: [{ text: prompt }] }],
         config: { 
-          responseMimeType: "application/json", 
-          responseSchema: schema 
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              duration: { type: Type.STRING },
+              items: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    passage: { type: Type.STRING },
+                    theme: { type: Type.STRING },
+                    reason: { type: Type.STRING }
+                  }
+                }
+              }
+            },
+            required: ["title", "description", "duration", "items"]
+          }
         }
       });
-      return JSON.parse(response.text || "{}") as ReadingPlan;
-    } else {
-      const messages = [
-        { role: "system", content: "Genera un itinerario de lectura bíblica en formato JSON con title, description e items." },
-        { role: "user", content: prompt }
-      ];
-      return await fetchFromOpenRouter(messages) as ReadingPlan;
+      return cleanJsonResponse(response.text || "{}");
+    } catch (error: any) {
+      throw new Error(`Error en Gemini Plan: ${error.message}`);
     }
-  } catch (error: any) {
-    throw new Error("Error al generar el plan de lectura.");
+  } else {
+    const messages = [
+      { role: "system", content: "Genera itinerarios de lectura bíblica en formato JSON." },
+      { role: "user", content: prompt }
+    ];
+    return await fetchFromOpenRouter(messages);
   }
 };

@@ -25,24 +25,10 @@ const App: React.FC = () => {
   const [planTopic, setPlanTopic] = useState('');
   const [planDuration, setPlanDuration] = useState<PlanDuration>('weekly');
   const [numQuestions, setNumQuestions] = useState(10);
-  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemma');
+  
+  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemini');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
   
-  const [hasGeminiKey, setHasGeminiKey] = useState(!!process.env.API_KEY);
-
-  useEffect(() => {
-    const checkKeys = async () => {
-      const win = window as any;
-      if (win.aistudio && typeof win.aistudio.hasSelectedApiKey === 'function') {
-        const hasKey = await win.aistudio.hasSelectedApiKey();
-        if (hasKey || process.env.API_KEY) {
-          setHasGeminiKey(true);
-        }
-      }
-    };
-    checkKeys();
-  }, []);
-
   useEffect(() => {
     localStorage.setItem(PROVIDER_KEY, aiProvider);
   }, [aiProvider]);
@@ -54,15 +40,6 @@ const App: React.FC = () => {
     else root.classList.remove('dark');
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
-
-  const handleOpenKeySelector = async () => {
-    const win = window as any;
-    if (win.aistudio && typeof win.aistudio.openSelectKey === 'function') {
-      await win.aistudio.openSelectKey();
-      setHasGeminiKey(true);
-      setErrorMessage('');
-    }
-  };
 
   const [stats, setStats] = useState<UserStats>(() => {
     try {
@@ -76,17 +53,6 @@ const App: React.FC = () => {
     const targetPassage = passageStr || input;
     if (!targetPassage.trim()) return;
 
-    // Validación de claves antes de intentar la llamada
-    if (aiProvider === 'gemini' && !hasGeminiKey && !process.env.API_KEY) {
-      setErrorMessage("⚠️ Configuración requerida: No se detectó API Key para Gemini.");
-      return;
-    }
-    
-    if (aiProvider === 'gemma' && !process.env.OpenRouter_API_KEY) {
-      setErrorMessage("⚠️ Falta clave: No se detectó 'OpenRouter_API_KEY' en el archivo .env.");
-      return;
-    }
-
     setErrorMessage('');
     setStatus('loading');
     try {
@@ -94,46 +60,46 @@ const App: React.FC = () => {
       setData(result);
       setStatus('content');
       setActiveTab('study');
+      
+      // Bonus por estudio
+      setStats(prev => ({...prev, emeralds: prev.emeralds + 10}));
     } catch (error: any) {
-      setErrorMessage(error.message);
+      console.error("Error capturado:", error);
+      setErrorMessage(error.message || "Error inesperado al conectar con el servidor.");
       setStatus('error');
-      if (aiProvider === 'gemini' && (error.message.includes("not found") || error.message.includes("401"))) {
-        setHasGeminiKey(false);
-      }
     }
   };
 
-  // Fix: Added 'loading_plan' to the home status check to resolve TypeScript narrowing errors on status comparisons (Error lines 212, 213)
   const isHome = status === 'idle' || status === 'loading' || status === 'error' || status === 'loading_plan';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors">
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 font-sans">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 transition-colors">
         <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setStatus('idle'); setErrorMessage(''); setData(null); setPlanData(null); }}>
-            <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-md">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setStatus('idle'); setErrorMessage(''); setData(null); setPlanData(null); }}>
+            <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg group-hover:scale-105 transition-transform">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
             </div>
-            <h1 className="text-xl font-black hidden md:block tracking-tight">Vida Palabra</h1>
+            <h1 className="text-xl font-black hidden md:block tracking-tight text-slate-800 dark:text-slate-100">Vida Palabra</h1>
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex">
+            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex border border-slate-200 dark:border-slate-700">
               <button 
                 onClick={() => { setAiProvider('gemma'); setErrorMessage(''); }} 
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                Gemma 3
+                Gemma 3 (Free)
               </button>
               <button 
                 onClick={() => { setAiProvider('gemini'); setErrorMessage(''); }} 
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                Gemini 3
+                Gemini 3 Flash
               </button>
             </div>
             <GamificationHeader stats={stats} onOpenStore={() => setStatus('store')} />
-            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all">
+            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all text-xl">
               {theme === 'light' ? '☀️' : '🌙'}
             </button>
           </div>
@@ -142,31 +108,31 @@ const App: React.FC = () => {
 
       <main className="max-w-4xl mx-auto px-4 py-10">
         {isHome && (
-          <div className="space-y-12 animate-in fade-in">
+          <div className="space-y-12 animate-in fade-in duration-700">
             <div className="text-center space-y-4">
-              <h2 className="text-5xl font-serif font-bold text-indigo-900 dark:text-indigo-400">Tu Compañero Espiritual</h2>
-              <p className="text-lg text-slate-500 dark:text-slate-400">Explora las escrituras con el apoyo de Inteligencia Artificial.</p>
+              <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300 transition-colors">Estudio Bíblico Gratis</h2>
+              <p className="text-lg text-slate-500 dark:text-slate-400 transition-colors max-w-2xl mx-auto">Usando modelos de IA abiertos para profundizar en tu fe.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Card Estudio de Pasaje */}
-              <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col transition-all">
-                <h3 className="text-xl font-bold mb-4">Estudio de Pasaje</h3>
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col transition-all hover:border-indigo-200">
+                <h3 className="text-xl font-bold mb-4 text-slate-800 dark:text-slate-100">Analizar Pasaje</h3>
                 <textarea 
                   value={input} 
                   onChange={(e) => { setInput(e.target.value); setErrorMessage(''); }} 
-                  placeholder="Ej: Juan 3:16, Salmo 23..." 
-                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[120px] transition-all" 
+                  placeholder="Ej: Romanos 12:1-2, Salmo 91..." 
+                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all text-slate-800 dark:text-slate-200" 
                 />
                 
-                {errorMessage && status !== 'loading' && (
-                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold rounded-xl animate-in shake">
-                    {errorMessage}
+                {errorMessage && (
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-2xl border border-red-100 dark:border-red-900/50 flex gap-2 items-start">
+                    <span className="text-lg">⚠️</span>
+                    <span>{errorMessage}</span>
                   </div>
                 )}
 
                 <Button 
-                  className="mt-6 w-full" 
+                  className="mt-6 w-full py-4 text-lg" 
                   onClick={() => handleGenerate()} 
                   disabled={!input.trim() || status === 'loading'}
                   isLoading={status === 'loading'}
@@ -175,31 +141,31 @@ const App: React.FC = () => {
                 </Button>
               </div>
 
-              {/* Card Plan Temático */}
-              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col">
-                <h3 className="text-xl font-bold mb-4">Plan Temático</h3>
+              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col border border-white/5">
+                <h3 className="text-xl font-bold mb-4">Plan de Lectura</h3>
                 <input 
                   type="text" 
                   value={planTopic} 
                   onChange={(e) => { setPlanTopic(e.target.value); setErrorMessage(''); }} 
-                  placeholder="Tema: Paz, Liderazgo, Fe..." 
-                  className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none mb-4 focus:ring-2 focus:ring-teal-400 transition-all" 
+                  placeholder="Tema: Paz, Matrimonio, Liderazgo..." 
+                  className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none mb-4 focus:ring-2 focus:ring-teal-400 transition-all placeholder:text-white/30" 
                 />
                 <div className="flex gap-2 mb-6">
                   {['weekly', 'monthly'].map(d => (
                     <button 
                       key={d} 
                       onClick={() => setPlanDuration(d as any)}
-                      className={`flex-grow py-2 rounded-lg text-[10px] font-black uppercase transition-all ${planDuration === d ? 'bg-teal-400 text-slate-900' : 'bg-white/5 text-white/50'}`}
+                      className={`flex-grow py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${planDuration === d ? 'bg-teal-400 border-teal-400 text-slate-900 shadow-lg' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
                     >
-                      {d === 'weekly' ? 'Semanal' : 'Mensual'}
+                      {d === 'weekly' ? '7 Días' : '30 Días'}
                     </button>
                   ))}
                 </div>
                 <Button 
                   variant="secondary" 
-                  className="mt-auto bg-teal-400 text-slate-900 border-none hover:bg-teal-300" 
+                  className="mt-auto bg-teal-400 text-slate-900 border-none hover:bg-teal-300 py-4 text-lg" 
                   onClick={async () => {
+                    setErrorMessage('');
                     setStatus('loading_plan');
                     try {
                       const p = await generateReadingPlan(planTopic, planDuration, aiProvider);
@@ -213,69 +179,74 @@ const App: React.FC = () => {
                   disabled={!planTopic.trim() || status === 'loading_plan'}
                   isLoading={status === 'loading_plan'}
                 >
-                  Diseñar Plan
+                  Diseñar Itinerario
                 </Button>
               </div>
             </div>
             
-            {status === 'loading' && (
-              <div className="text-center space-y-2 animate-pulse">
-                <p className="text-indigo-600 dark:text-indigo-400 font-bold">Inspirando resultados...</p>
-                <p className="text-xs text-slate-500">Esto puede tardar unos segundos dependiendo del pasaje.</p>
+            {(status === 'loading' || status === 'loading_plan') && (
+              <div className="text-center space-y-4 animate-pulse">
+                <p className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">Inspirando tu estudio...</p>
+                <p className="text-sm text-slate-500">Si el servicio tarda, es posible que el proveedor esté saturado. Por favor, reintenta.</p>
               </div>
             )}
           </div>
         )}
 
         {status === 'content' && data && (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
+          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="text-center">
-               <h2 className="text-4xl font-serif font-bold text-slate-900 dark:text-slate-100 transition-colors">{data.title}</h2>
-               <p className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest mt-2 transition-colors">{input}</p>
+               <h2 className="text-5xl font-serif font-bold text-slate-900 dark:text-slate-100 transition-colors leading-tight">{data.title}</h2>
+               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-sm mt-2">{input}</p>
             </div>
 
-            <div className="flex justify-center gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl max-w-xs mx-auto">
+            <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto shadow-inner">
               {['study', 'quiz', 'journal'].map(tab => (
                 <button 
                   key={tab} 
                   onClick={() => setActiveTab(tab as any)}
-                  className={`flex-grow py-2 rounded-xl text-xs font-bold capitalize transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                  className={`flex-grow py-3 px-4 rounded-2xl text-[11px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-md' : 'text-slate-500'}`}
                 >
-                  {tab === 'study' ? 'Estudio' : tab === 'quiz' ? 'Desafío' : 'Diario'}
+                  {tab === 'study' ? 'Estudio' : tab === 'quiz' ? 'Reto' : 'Diario'}
                 </button>
               ))}
             </div>
 
-            {activeTab === 'study' && (
-              <div className="space-y-8 animate-in fade-in">
-                <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 italic font-serif text-xl leading-relaxed text-center shadow-sm transition-all">
-                  "{data.passageText}"
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 transition-all">
-                    <h4 className="font-black text-[10px] text-indigo-500 uppercase mb-2 tracking-tighter">Resumen Teológico</h4>
-                    <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{data.summary}</p>
+            <div className="min-h-[500px]">
+              {activeTab === 'study' && (
+                <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
+                  <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border border-slate-100 dark:border-slate-800 italic font-serif text-2xl leading-relaxed text-center shadow-lg transition-all text-slate-800 dark:text-slate-100">
+                    "{data.passageText}"
                   </div>
-                  <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 transition-all">
-                    <h4 className="font-black text-[10px] text-teal-500 uppercase mb-2 tracking-tighter">Contexto Histórico</h4>
-                    <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{data.historicalContext}</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
+                      <h4 className="font-black text-[10px] text-indigo-500 uppercase mb-4 tracking-[0.2em]">Explicación</h4>
+                      <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300">{data.summary}</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
+                      <h4 className="font-black text-[10px] text-teal-500 uppercase mb-4 tracking-[0.2em]">Contexto</h4>
+                      <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300">{data.historicalContext}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="bg-indigo-600 text-white p-8 rounded-[2.5rem] shadow-xl">
-                  <h4 className="text-xs font-black uppercase tracking-widest mb-4 opacity-70">Aplicación Práctica</h4>
-                  <p className="text-lg font-serif italic leading-relaxed">"{data.practicalApplication}"</p>
-                </div>
-                <DailyGuide plan={data.dailyPlan} />
-              </div>
-            )}
 
-            {activeTab === 'quiz' && <Quiz questions={data.quiz} />}
-            {activeTab === 'journal' && <Journal prompts={data.reflectionPrompts} devotionalData={data} />}
+                  <div className="bg-indigo-600 text-white p-10 rounded-[3rem] shadow-2xl">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 opacity-80">Aplicación Diaria</h4>
+                    <p className="text-2xl font-serif italic leading-relaxed">"{data.practicalApplication}"</p>
+                  </div>
+                  
+                  <DailyGuide plan={data.dailyPlan} />
+                </div>
+              )}
+
+              {activeTab === 'quiz' && <div className="animate-in fade-in slide-in-from-right-4 duration-500"><Quiz questions={data.quiz} /></div>}
+              {activeTab === 'journal' && <div className="animate-in fade-in slide-in-from-right-4 duration-500"><Journal prompts={data.reflectionPrompts} devotionalData={data} /></div>}
+            </div>
           </div>
         )}
 
         {status === 'viewing_plan' && planData && (
-          <div className="animate-in fade-in slide-in-from-bottom-4">
+          <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
             <ReadingPlanView 
               plan={planData} 
               onSelectPassage={(p) => {
@@ -283,13 +254,12 @@ const App: React.FC = () => {
                 handleGenerate(p);
               }} 
             />
-            <div className="mt-8 flex justify-center">
-              <Button onClick={() => setStatus('idle')} variant="outline">Crear otro plan</Button>
+            <div className="mt-12 flex justify-center">
+              <Button onClick={() => setStatus('idle')} variant="outline" className="px-10 border-slate-300 text-slate-600">Crear otro plan</Button>
             </div>
           </div>
         )}
 
-        {/* Fix: Added missing Store rendering logic */}
         {status === 'store' && (
           <Store 
             stats={stats} 
@@ -306,6 +276,11 @@ const App: React.FC = () => {
           />
         )}
       </main>
+      
+      <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-2 text-slate-400">
+        <p className="text-sm font-bold tracking-widest uppercase">Vida en la Palabra © 2025</p>
+        <p className="text-xs">Usa Gemini 3 Flash para una experiencia gratuita y estable.</p>
+      </footer>
     </div>
   );
 };
