@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { generateDevotional, generateReadingPlan } from './services/geminiService';
 import { AppStatus, DevotionalData, ReadingPlan, PlanDuration, HistoryItem, FavoriteItem, UserStats, AIProvider } from './types';
@@ -15,15 +16,17 @@ const PROVIDER_KEY = 'app_ai_provider_preference';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
-// Declaración para TypeScript - Corregido para coincidir con los modificadores y tipos globales existentes
-declare global {
-  interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
-  }
+// Define the expected AIStudio interface for Gemini API key management
+interface AIStudio {
+  hasSelectedApiKey(): Promise<boolean>;
+  openSelectKey(): Promise<void>;
+}
 
+// Declaración de tipos segura para el entorno
+// Fixed: Changed 'any' to 'AIStudio' to match global type and resolve modifier conflicts
+declare global {
   interface Window {
-    readonly aistudio: AIStudio;
+    aistudio: AIStudio;
   }
 }
 
@@ -37,25 +40,18 @@ const App: React.FC = () => {
   const [planTopic, setPlanTopic] = useState('');
   const [planDuration, setPlanDuration] = useState<PlanDuration>('weekly');
   const [numQuestions, setNumQuestions] = useState(10);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemma');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
-  const [hasGeminiKey, setHasGeminiKey] = useState(true);
-
-  const [stats, setStats] = useState<UserStats>(() => {
-    try {
-      const saved = localStorage.getItem(STATS_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return { streak: 0, lastStudyDate: null, emeralds: 0, protectors: 0 };
-  });
+  
+  const [hasGeminiKey, setHasGeminiKey] = useState(!!process.env.API_KEY);
 
   useEffect(() => {
     const checkKeys = async () => {
-      if (window.aistudio) {
+      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
         const hasKey = await window.aistudio.hasSelectedApiKey();
-        // Si no hay key seleccionada y no hay process.env, marcamos como falso
-        if (!hasKey && (!process.env.API_KEY || process.env.API_KEY === "undefined")) {
+        if (hasKey || process.env.API_KEY) {
+          setHasGeminiKey(true);
+        } else {
           setHasGeminiKey(false);
         }
       }
@@ -76,18 +72,26 @@ const App: React.FC = () => {
   }, [theme]);
 
   const handleOpenKeySelector = async () => {
-    if (window.aistudio) {
+    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
       await window.aistudio.openSelectKey();
-      setHasGeminiKey(true); // Asumimos éxito
+      setHasGeminiKey(true);
     }
   };
+
+  const [stats, setStats] = useState<UserStats>(() => {
+    try {
+      const saved = localStorage.getItem(STATS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return { streak: 0, lastStudyDate: null, emeralds: 0, protectors: 0 };
+  });
 
   const handleGenerate = async (passageStr?: string) => {
     const targetPassage = passageStr || input;
     if (!targetPassage.trim()) return;
 
-    if (aiProvider === 'gemini' && !hasGeminiKey) {
-      setErrorMessage("Debes seleccionar una API Key de Gemini para usar este motor.");
+    if (aiProvider === 'gemini' && !hasGeminiKey && !process.env.API_KEY) {
+      setErrorMessage("Por favor, selecciona o configura tu API Key para usar Gemini.");
       return;
     }
 
@@ -101,8 +105,7 @@ const App: React.FC = () => {
     } catch (error: any) {
       setErrorMessage(error.message);
       setStatus('error');
-      // Si el error es de entidad no encontrada, resetear estado de key
-      if (error.message.includes("Requested entity was not found")) {
+      if (error.message.includes("not found") || error.message.includes("401")) {
         setHasGeminiKey(false);
       }
     }
@@ -143,7 +146,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-10">
-        {aiProvider === 'gemini' && !hasGeminiKey && (
+        {aiProvider === 'gemini' && !hasGeminiKey && !process.env.API_KEY && (
           <div className="mb-8 p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
             <div>
               <p className="font-bold text-amber-800 dark:text-amber-400">Configuración Requerida</p>
