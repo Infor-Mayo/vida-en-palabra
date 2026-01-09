@@ -23,9 +23,9 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button 
+      {...props}
       className={`${baseStyles} ${variants[variant]} ${className}`}
       disabled={isLoading || props.disabled}
-      {...props}
     >
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-inherit">
