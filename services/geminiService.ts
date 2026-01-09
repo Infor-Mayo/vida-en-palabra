@@ -59,12 +59,16 @@ const RESPONSE_SCHEMA = (numQuestions: number) => ({
 });
 
 const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
-  // Usamos OpenRouter_API_KEY para OpenRouter como solicitó el usuario
+  const apiKey = process.env.OpenRouter_API_KEY;
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("La clave OpenRouter_API_KEY no está configurada en el entorno.");
+  }
+
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.OpenRouter_API_KEY}`,
+      "Authorization": `Bearer ${apiKey}`,
       "HTTP-Referer": window.location.origin,
       "X-Title": "Vida en la Palabra",
     },
@@ -77,17 +81,20 @@ const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.error?.message || "Error al conectar con OpenRouter (Gemma)");
+    throw new Error(errorData.error?.message || `Error ${response.status}: Fallo en OpenRouter`);
   }
 
   const data = await response.json();
-  const content = data.choices[0].message.content;
-  return JSON.parse(content);
+  return JSON.parse(data.choices[0].message.content);
 };
 
 const fetchFromGeminiDirect = async (prompt: string, numQuestions: number): Promise<any> => {
-  // Usamos la API_KEY estándar para el SDK de Google GenAI
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("La clave API_KEY de Gemini no está configurada o no ha sido seleccionada.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: prompt,
@@ -99,7 +106,7 @@ const fetchFromGeminiDirect = async (prompt: string, numQuestions: number): Prom
     }
   });
   
-  if (!response.text) throw new Error("La IA no devolvió contenido.");
+  if (!response.text) throw new Error("No se recibió respuesta del modelo Gemini.");
   return JSON.parse(response.text);
 };
 
@@ -116,7 +123,7 @@ export const generateDevotional = async (passage: string, provider: AIProvider, 
     }
   } catch (error: any) {
     console.error("Error en generateDevotional:", error);
-    throw new Error(error.message || "No se pudo generar el estudio.");
+    throw new Error(error.message || "Error al generar el estudio.");
   }
 };
 
@@ -137,12 +144,10 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration,
             passage: { type: Type.STRING },
             theme: { type: Type.STRING },
             reason: { type: Type.STRING }
-          },
-          required: ["id", "passage", "theme", "reason"]
+          }
         }
       }
-    },
-    required: ["title", "description", "duration", "items"]
+    }
   };
 
   try {
@@ -151,21 +156,17 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration,
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: prompt,
-        config: { 
-          responseMimeType: "application/json", 
-          responseSchema: schema 
-        }
+        config: { responseMimeType: "application/json", responseSchema: schema }
       });
       return JSON.parse(response.text || "{}") as ReadingPlan;
     } else {
       const messages = [
-        { role: "system", content: "Crea un itinerario de lectura bíblica en JSON con propiedades title, description, duration e items (un array de objetos con id, passage, theme y reason)." },
+        { role: "system", content: "Crea un itinerario de lectura bíblica en JSON." },
         { role: "user", content: prompt }
       ];
       return await fetchFromOpenRouter(messages) as ReadingPlan;
     }
   } catch (error: any) {
-    console.error("Error en generateReadingPlan:", error);
-    throw new Error("Error al diseñar el plan de lectura.");
+    throw new Error("Fallo al diseñar el plan de lectura.");
   }
 };
