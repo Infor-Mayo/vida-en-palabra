@@ -89,13 +89,13 @@ const App: React.FC = () => {
                 onClick={() => { setAiProvider('gemma'); setErrorMessage(''); }} 
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                Gemma 3 (Free)
+                Gemma (Free)
               </button>
               <button 
                 onClick={() => { setAiProvider('gemini'); setErrorMessage(''); }} 
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                Gemini 3 Flash
+                Gemini (Free)
               </button>
             </div>
             <GamificationHeader stats={stats} onOpenStore={() => setStatus('store')} />
@@ -111,7 +111,7 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in duration-700">
             <div className="text-center space-y-4">
               <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300 transition-colors">Estudio Bíblico Gratis</h2>
-              <p className="text-lg text-slate-500 dark:text-slate-400 transition-colors max-w-2xl mx-auto">Usando modelos de IA abiertos para profundizar en tu fe.</p>
+              <p className="text-lg text-slate-500 dark:text-slate-400 transition-colors max-w-2xl mx-auto">Usando Gemini 3 Flash y Gemma para profundizar en tu fe.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -125,9 +125,9 @@ const App: React.FC = () => {
                 />
                 
                 {errorMessage && (
-                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-2xl border border-red-100 dark:border-red-900/50 flex gap-2 items-start">
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-2xl border border-red-100 dark:border-red-900/50 flex gap-2 items-start overflow-hidden">
                     <span className="text-lg">⚠️</span>
-                    <span>{errorMessage}</span>
+                    <span className="break-words">{errorMessage}</span>
                   </div>
                 )}
 
@@ -187,7 +187,7 @@ const App: React.FC = () => {
             {(status === 'loading' || status === 'loading_plan') && (
               <div className="text-center space-y-4 animate-pulse">
                 <p className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">Inspirando tu estudio...</p>
-                <p className="text-sm text-slate-500">Si el servicio tarda, es posible que el proveedor esté saturado. Por favor, reintenta.</p>
+                <p className="text-sm text-slate-500">Si un modelo falla, prueba cambiar a "{aiProvider === 'gemini' ? 'Gemma' : 'Gemini'}" en el menú superior.</p>
               </div>
             )}
           </div>
