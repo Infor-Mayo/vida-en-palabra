@@ -28,6 +28,7 @@ export interface DailyPlanDay {
 }
 
 export type PlanDuration = 'intensive' | 'weekly' | 'monthly' | 'annual';
+export type AIProvider = 'gemma' | 'gemini';
 
 export interface ReadingPlanItem {
   id: string; 
@@ -70,7 +71,7 @@ export interface FavoriteItem {
 
 export interface UserStats {
   streak: number;
-  lastStudyDate: string | null; // ISO Date YYYY-MM-DD
+  lastStudyDate: string | null;
   emeralds: number;
   protectors: number;
 }

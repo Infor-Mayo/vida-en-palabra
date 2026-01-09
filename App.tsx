@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { generateDevotional, generateReadingPlan } from './services/geminiService';
-import { AppStatus, DevotionalData, ReadingPlan, PlanDuration, HistoryItem, FavoriteItem, UserStats } from './types';
+import { AppStatus, DevotionalData, ReadingPlan, PlanDuration, HistoryItem, FavoriteItem, UserStats, AIProvider } from './types';
 import { Button } from './components/Button';
 import { Quiz } from './components/Quiz';
 import { Journal } from './components/Journal';
@@ -13,6 +13,7 @@ const HISTORY_KEY = 'devotional_history_v1';
 const FAVORITES_KEY = 'devotional_favorites_v1';
 const STATS_KEY = 'user_gamification_stats_v1';
 const THEME_KEY = 'app_theme_preference';
+const PROVIDER_KEY = 'app_ai_provider_preference';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -30,11 +31,11 @@ const App: React.FC = () => {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [currentPassageRef, setCurrentPassageRef] = useState('');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
+  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemma');
   
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [journalAnswers, setJournalAnswers] = useState<Record<number, string>>({});
 
-  // Gamificación State con protección contra JSON corrupto
   const [stats, setStats] = useState<UserStats>(() => {
     try {
       const saved = localStorage.getItem(STATS_KEY);
@@ -45,24 +46,22 @@ const App: React.FC = () => {
     return { streak: 0, lastStudyDate: null, emeralds: 0, protectors: 0 };
   });
 
-  // Efecto para verificar racha al cargar
+  useEffect(() => {
+    localStorage.setItem(PROVIDER_KEY, aiProvider);
+  }, [aiProvider]);
+
   useEffect(() => {
     const checkStreak = () => {
       if (!stats.lastStudyDate) return;
-
       const today = new Date().toISOString().split('T')[0];
       const lastDate = new Date(stats.lastStudyDate);
       const currentDate = new Date(today);
-      
       if (isNaN(lastDate.getTime())) return;
-
       const diffTime = currentDate.getTime() - lastDate.getTime();
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays > 1) {
-        // Se perdió la racha
         if (stats.protectors > 0) {
-          // Usar protector automáticamente
           setStats(prev => {
             const newStats = { ...prev, protectors: Math.max(0, prev.protectors - 1), lastStudyDate: today };
             localStorage.setItem(STATS_KEY, JSON.stringify(newStats));
@@ -109,10 +108,8 @@ const App: React.FC = () => {
   const completeDailyStudy = () => {
     const today = new Date().toISOString().split('T')[0];
     if (stats.lastStudyDate === today) return;
-
     const lastDate = stats.lastStudyDate ? new Date(stats.lastStudyDate) : null;
     const currentDate = new Date(today);
-    
     let newStreak = stats.streak + 1;
     if (lastDate) {
       const diffDays = Math.floor((currentDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -120,32 +117,24 @@ const App: React.FC = () => {
     } else {
       newStreak = 1;
     }
-
-    updateStats({
-      streak: newStreak,
-      lastStudyDate: today,
-      emeralds: stats.emeralds + 10
-    });
+    updateStats({ streak: newStreak, lastStudyDate: today, emeralds: stats.emeralds + 10 });
   };
 
   const handleGenerate = async (passageStr?: string) => {
     const targetPassage = passageStr || input;
     if (!targetPassage.trim()) return;
-    
     setErrorMessage('');
     setStatus('loading');
     setCurrentPassageRef(targetPassage);
     setQuizAnswers({});
     setJournalAnswers({});
-    
     try {
-      const result = await generateDevotional(targetPassage, numQuestions);
+      const result = await generateDevotional(targetPassage, aiProvider, numQuestions);
       setData(result);
       const newItem: HistoryItem = { id: Date.now().toString(), title: result.title, passage: targetPassage, timestamp: Date.now() };
       const updatedHistory = [newItem, ...history.filter(h => h.passage !== targetPassage)].slice(0, 10);
       setHistory(updatedHistory);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
-      
       setStatus('content');
       setActiveTab('study');
       completeDailyStudy();
@@ -159,10 +148,7 @@ const App: React.FC = () => {
 
   const buyProtector = () => {
     if (stats.emeralds >= 50) {
-      updateStats({
-        emeralds: stats.emeralds - 50,
-        protectors: stats.protectors + 1
-      });
+      updateStats({ emeralds: stats.emeralds - 50, protectors: stats.protectors + 1 });
     }
   };
 
@@ -179,7 +165,23 @@ const App: React.FC = () => {
             <h1 className="text-xl font-black text-slate-800 dark:text-slate-100 hidden md:block cursor-pointer" onClick={() => setStatus('idle')}>Vida Palabra</h1>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* Selector de IA */}
+            <div className="hidden sm:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button 
+                onClick={() => setAiProvider('gemma')} 
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 opacity-60'}`}
+              >
+                Gemma 3
+              </button>
+              <button 
+                onClick={() => setAiProvider('gemini')} 
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 opacity-60'}`}
+              >
+                Gemini 3
+              </button>
+            </div>
+
             <GamificationHeader stats={stats} onOpenStore={() => setStatus('store')} />
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light')} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
               {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '🖥️'}
@@ -205,12 +207,17 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in duration-700">
             <div className="text-center space-y-4">
               <h2 className="text-5xl font-serif font-bold text-indigo-900 dark:text-indigo-400">Tu Compañero Espiritual</h2>
-              <p className="text-lg text-slate-500 dark:text-slate-400 max-w-lg mx-auto">Profundiza en las escrituras mediante el poder de la IA.</p>
+              <p className="text-lg text-slate-500 dark:text-slate-400 max-w-lg mx-auto">Profundiza en las escrituras con el motor de IA de tu elección.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col">
-                <h3 className="text-xl font-bold mb-4">Estudio Rápido</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold">Estudio Rápido</h3>
+                  <span className="text-[10px] font-black uppercase px-2 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-lg">
+                    Usando {aiProvider === 'gemma' ? 'Gemma 3' : 'Gemini 3'}
+                  </span>
+                </div>
                 <textarea 
                   value={input} 
                   onChange={(e) => setInput(e.target.value)} 
@@ -225,7 +232,7 @@ const App: React.FC = () => {
                 <input type="text" value={planTopic} onChange={(e) => setPlanTopic(e.target.value)} placeholder="Tema: Paz, Esperanza..." className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none mb-4" />
                 <Button variant="secondary" className="mt-auto h-14 bg-teal-400 text-slate-900" onClick={async () => {
                   setErrorMessage(''); setStatus('loading_plan');
-                  try { const p = await generateReadingPlan(planTopic, planDuration); setPlanData(p); setStatus('viewing_plan'); }
+                  try { const p = await generateReadingPlan(planTopic, planDuration, aiProvider); setPlanData(p); setStatus('viewing_plan'); }
                   catch (e: any) { setErrorMessage(e.message); setStatus('error'); }
                 }} disabled={!planTopic.trim()}>Crear Itinerario</Button>
               </div>
@@ -238,14 +245,16 @@ const App: React.FC = () => {
         {status === 'loading' && (
           <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-4">
             <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
-            <p className="text-lg font-medium">Preparando tu estudio...</p>
+            <p className="text-lg font-medium">Invocando sabiduría con {aiProvider === 'gemma' ? 'Gemma' : 'Gemini'}...</p>
+            {aiProvider === 'gemini' && <p className="text-xs text-slate-400 italic">El modelo Pro realiza un análisis más profundo, esto puede tardar unos segundos más.</p>}
           </div>
         )}
 
         {status === 'error' && (
           <div className="bg-red-50 dark:bg-red-900/20 p-10 rounded-[2.5rem] text-center space-y-4">
-            <h3 className="text-xl font-bold text-red-600">Ocurrió un error</h3>
-            <p>{errorMessage}</p>
+            <h3 className="text-xl font-bold text-red-600">Error de Conexión</h3>
+            <p className="text-sm opacity-80">{errorMessage}</p>
+            <p className="text-xs">Asegúrate de que tu clave de API sea válida para el motor seleccionado ({aiProvider}).</p>
             <Button onClick={() => setStatus('idle')}>Volver a Intentar</Button>
           </div>
         )}
@@ -258,7 +267,11 @@ const App: React.FC = () => {
           <div className="space-y-10">
             <div className="text-center">
                <h2 className="text-4xl font-serif font-bold">{data.title}</h2>
-               <p className="text-indigo-600 font-bold mt-2 uppercase tracking-widest">{currentPassageRef}</p>
+               <div className="flex items-center justify-center gap-3 mt-2">
+                 <p className="text-indigo-600 font-bold uppercase tracking-widest">{currentPassageRef}</p>
+                 <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                 <p className="text-[10px] font-black uppercase text-slate-400">Analizado por {aiProvider}</p>
+               </div>
             </div>
 
             <div className="flex justify-center gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl max-w-xs mx-auto">
@@ -280,13 +293,17 @@ const App: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
-                    <h4 className="font-black text-[10px] text-indigo-500 uppercase mb-2">Resumen</h4>
-                    <p className="text-sm">{data.summary}</p>
+                    <h4 className="font-black text-[10px] text-indigo-500 uppercase mb-2">Resumen Teológico</h4>
+                    <p className="text-sm leading-relaxed">{data.summary}</p>
                   </div>
                   <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
-                    <h4 className="font-black text-[10px] text-teal-500 uppercase mb-2">Contexto</h4>
-                    <p className="text-sm">{data.historicalContext}</p>
+                    <h4 className="font-black text-[10px] text-teal-500 uppercase mb-2">Contexto Histórico</h4>
+                    <p className="text-sm leading-relaxed">{data.historicalContext}</p>
                   </div>
+                </div>
+                <div className="bg-indigo-600 text-white p-8 rounded-[2.5rem] shadow-xl">
+                  <h4 className="text-xs font-black uppercase tracking-widest mb-4 opacity-70">Aplicación Práctica</h4>
+                  <p className="text-lg font-serif italic">"{data.practicalApplication}"</p>
                 </div>
                 <DailyGuide plan={data.dailyPlan} />
               </div>
