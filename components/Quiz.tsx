@@ -39,7 +39,7 @@ export const Quiz: React.FC<QuizProps> = ({
 
   const q = questions[currentIdx];
 
-  // Regex actualizada para capturar [blank], [BLANK], ___ y variaciones
+  // Regex para capturar [blank], [BLANK], ___ y variaciones
   const BLANK_REGEX = /\[\s*blank\s*\]|\[\s*_+\s*\]|(?<!\w)_+(?!\w)/gi;
 
   useEffect(() => {
@@ -54,7 +54,8 @@ export const Quiz: React.FC<QuizProps> = ({
       const rights = q.pairs.map(p => p.right);
       setShuffledRights([...rights].sort(() => Math.random() - 0.5));
     } else if (q.type === 'fill-in-the-blanks') {
-      const blanksInText = q.textWithBlanks?.match(BLANK_REGEX)?.length || 0;
+      const content = q.textWithBlanks || q.question || "";
+      const blanksInText = content.match(BLANK_REGEX)?.length || 0;
       const count = Math.max(blanksInText, q.blankAnswers?.length || 0);
       setBlankStates(new Array(count).fill(''));
     }
@@ -165,7 +166,9 @@ export const Quiz: React.FC<QuizProps> = ({
         <p className="text-xs text-slate-400 font-bold">Reto {currentIdx + 1} de {questions.length}</p>
       </div>
 
-      <h3 className="text-2xl font-serif text-slate-800 dark:text-slate-100 mb-10 leading-snug">{q.question}</h3>
+      <h3 className="text-2xl font-serif text-slate-800 dark:text-slate-100 mb-10 leading-snug">
+        {q.type === 'fill-in-the-blanks' ? "Completa el siguiente texto:" : q.question}
+      </h3>
 
       <div className="mb-10 min-h-[160px]">
         {q.type === 'matching' && q.pairs && (
@@ -203,7 +206,7 @@ export const Quiz: React.FC<QuizProps> = ({
 
         {q.type === 'fill-in-the-blanks' && (
           <div className="bg-slate-50 dark:bg-slate-800 p-8 rounded-3xl text-lg leading-loose border border-slate-100 dark:border-slate-700">
-            {q.textWithBlanks?.split(BLANK_REGEX).map((part, i, arr) => (
+            {(q.textWithBlanks || q.question || "").split(BLANK_REGEX).map((part, i, arr) => (
               <React.Fragment key={i}>
                 {part}
                 {i < arr.length - 1 && (
@@ -213,7 +216,7 @@ export const Quiz: React.FC<QuizProps> = ({
                     value={blankStates[i] || ""} 
                     onChange={(e) => { const newB = [...blankStates]; newB[i] = e.target.value; setBlankStates(newB); }} 
                     placeholder="..."
-                    className={`mx-2 px-3 py-1 w-36 bg-white dark:bg-slate-700 border-b-4 outline-none transition-all text-center rounded-lg font-bold placeholder:opacity-30 ${isAnswered ? (blankStates[i]?.toLowerCase().trim() === q.blankAnswers?.[i]?.toLowerCase().trim() ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-rose-500 bg-rose-50 dark:bg-rose-900/20') : 'border-indigo-300 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/10'}`} 
+                    className={`mx-2 px-3 py-1 w-36 bg-white dark:bg-slate-700 border-b-4 outline-none transition-all text-center rounded-lg font-bold placeholder:opacity-30 ${isAnswered ? (blankStates[i]?.toLowerCase().trim() === (q.blankAnswers?.[i] || "").toLowerCase().trim() ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-rose-500 bg-rose-50 dark:bg-rose-900/20') : 'border-indigo-300 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/10'}`} 
                   />
                 )}
               </React.Fragment>

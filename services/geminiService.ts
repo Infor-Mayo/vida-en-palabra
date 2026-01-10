@@ -81,8 +81,11 @@ Asegúrate de incluir el 'passageText' completo del pasaje solicitado.`;
 
 const SYSTEM_QUIZ = (num: number, diff: QuizDifficulty) => `Eres un educador bíblico experto en pedagogía. 
 Genera un cuestionario interactivo de nivel ${diff.toUpperCase()}. 
-REGLA CRÍTICA: Si el tipo es 'multiple-choice', DEBES incluir obligatoriamente el array 'options' con 4 opciones y el 'correctIndex' (0-3). 
-Genera exactamente ${num} preguntas variadas. Responde con JSON puro.`;
+REGLAS CRÍTICAS DE FORMATO:
+1. 'multiple-choice': DEBES incluir 'options' (4 opciones) y 'correctIndex' (0-3).
+2. 'fill-in-the-blanks': El campo 'textWithBlanks' DEBE contener el texto con marcadores '[blank]' donde falten palabras. El campo 'blankAnswers' DEBE contener las palabras correctas en orden.
+3. Genera exactamente ${num} preguntas variadas (matching, ordering, multiple-choice, fill-in-the-blanks). 
+Responde con JSON puro.`;
 
 const SYSTEM_APPLICATION = `Eres un mentor espiritual. Genera la aplicación práctica (máx 150 palabras), 3 preguntas de reflexión y un plan de 5 días para profundizar.`;
 
