@@ -5,22 +5,36 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
   let source = "ninguna";
   let rawKey: string | undefined = "";
 
-  // Intentamos detectar qué variable tiene contenido real
+  // SOLO buscamos en las variables específicas de OpenRouter
   if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== "undefined") {
     rawKey = process.env.OPENROUTER_API_KEY;
     source = "OPENROUTER_API_KEY (Mayúsculas)";
   } else if (process.env.OpenRouter_API_KEY && process.env.OpenRouter_API_KEY !== "undefined") {
     rawKey = process.env.OpenRouter_API_KEY;
     source = "OpenRouter_API_KEY (CamelCase)";
-  } else if (process.env.API_KEY && process.env.API_KEY !== "undefined") {
-    rawKey = process.env.API_KEY;
-    source = "API_KEY (Genérica)";
   }
 
   const apiKey = rawKey?.trim() || "";
   
+  // 1. Error si no hay ninguna clave específica de OpenRouter
   if (!apiKey || apiKey === "") {
-    throw new Error(`Error de Configuración: No se detectó ninguna clave para Gemma. Fuentes revisadas: OPENROUTER_API_KEY, OpenRouter_API_KEY y API_KEY. Por favor, asegúrate de que el valor no esté vacío en tu panel.`);
+    throw new Error(
+      `Configuración de Gemma Incorrecta:\n` +
+      `No se detectó una clave específica para OpenRouter.\n\n` +
+      `SISTEMA DETECTÓ:\n` +
+      `• OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'Presente' : 'Vacía'}\n` +
+      `• OpenRouter_API_KEY: ${process.env.OpenRouter_API_KEY ? 'Presente' : 'Vacía'}\n\n` +
+      `Por favor, asegúrate de que una de estas dos variables tenga tu clave que empieza por 'sk-or-...'`
+    );
+  }
+
+  // 2. Validación de seguridad: ¿Es una clave de Google (Gemini)?
+  if (apiKey.startsWith("AIza")) {
+    throw new Error(
+      `Error de Configuración Crítico:\n` +
+      `La clave encontrada en ${source} parece ser una clave de Google Gemini (empieza por 'AIza').\n\n` +
+      `Gemma requiere una clave de OpenRouter (empieza por 'sk-or-'). Por favor, actualiza tus variables de entorno.`
+    );
   }
 
   try {
@@ -50,10 +64,10 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
         
         throw new Error(
           `Error de Autenticación OpenRouter (401):\n` +
-          `• Fuente detectada: ${source}\n` +
+          `• Fuente: ${source}\n` +
           `• Clave usada: ${maskedKey}\n` +
-          `• Longitud: ${apiKey.length} caracteres\n\n` +
-          `EL PROBLEMA: OpenRouter no reconoce esta clave. Verifica que sea una clave de 'OpenRouter' y no de 'Gemini', y que no tenga espacios accidentales.`
+          `• Longitud: ${apiKey.length}\n\n` +
+          `LA CLAVE NO ES VÁLIDA: Aunque es la variable correcta, OpenRouter la rechaza. Verifica que no haya espacios y que la clave esté activa en tu panel de OpenRouter.`
         );
       }
       
@@ -64,7 +78,7 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
     const data = await response.json();
     return data.choices?.[0]?.message?.content || "";
   } catch (error: any) {
-    if (error.message.includes("401")) throw error;
+    if (error.message.includes("401") || error.message.includes("Configuración")) throw error;
     throw new Error(`Error de conexión con Gemma (vía ${source}): ${error.message}`);
   }
 };
