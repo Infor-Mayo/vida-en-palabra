@@ -29,7 +29,7 @@ const App: React.FC = () => {
   
   const [difficulty, setDifficulty] = useState<QuizDifficulty>(() => (localStorage.getItem(DIFFICULTY_KEY) as QuizDifficulty) || 'medium');
   const [numQuestions, setNumQuestions] = useState<number>(() => Number(localStorage.getItem(NUM_QUESTIONS_KEY)) || 5);
-  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemini');
+  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemma');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
   
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
@@ -71,31 +71,18 @@ const App: React.FC = () => {
   const updateStreak = () => {
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    
     setStats(prev => {
       let newStreak = prev.streak;
       const alreadyStudiedToday = prev.studyHistory.includes(today);
-      
       if (!alreadyStudiedToday) {
-        if (prev.lastStudyDate === yesterday) {
-          newStreak += 1;
-        } else if (prev.lastStudyDate !== today) {
-          if (prev.protectors > 0 && prev.lastStudyDate) {
-            newStreak += 1;
-          } else {
-            newStreak = 1;
-          }
+        if (prev.lastStudyDate === yesterday) newStreak += 1;
+        else if (prev.lastStudyDate !== today) {
+          if (prev.protectors > 0 && prev.lastStudyDate) newStreak += 1;
+          else newStreak = 1;
         }
       }
-
       const newHistory = alreadyStudiedToday ? prev.studyHistory : [...prev.studyHistory, today];
-      
-      return {
-        ...prev,
-        streak: newStreak,
-        lastStudyDate: today,
-        studyHistory: newHistory
-      };
+      return { ...prev, streak: newStreak, lastStudyDate: today, studyHistory: newHistory };
     });
   };
 
@@ -114,20 +101,16 @@ const App: React.FC = () => {
       setData(result);
       setStatus('content');
       setActiveTab('study');
-      
       updateStreak();
-      
       const reward = (difficulty === 'hard' ? 5 : difficulty === 'medium' ? 3 : 2) * numQuestions;
       setStats(prev => ({...prev, emeralds: prev.emeralds + reward}));
     } catch (error: any) {
-      setErrorMessage(error.message || "Error al conectar con la IA.");
+      setErrorMessage(error.message);
       setStatus('error');
     }
   };
 
   const isModalOpen = ['store', 'calendar', 'reminders'].includes(status);
-  
-  // Determinamos qué vista principal mostrar detrás de los modales
   const showContent = (status === 'content' || isModalOpen) && data !== null;
   const showReadingPlan = (status === 'viewing_plan' || isModalOpen) && planData !== null && !showContent;
   const showHome = !showContent && !showReadingPlan;
@@ -143,12 +126,7 @@ const App: React.FC = () => {
             <h1 className="text-xl font-black hidden md:block tracking-tight text-slate-800 dark:text-slate-100">Vida Palabra</h1>
           </div>
           <div className="flex items-center gap-4">
-            <GamificationHeader 
-              stats={stats} 
-              onOpenStore={() => setStatus('store')} 
-              onOpenCalendar={() => setStatus('calendar')}
-              onOpenReminders={() => setStatus('reminders')}
-            />
+            <GamificationHeader stats={stats} onOpenStore={() => setStatus('store')} onOpenCalendar={() => setStatus('calendar')} onOpenReminders={() => setStatus('reminders')} />
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all text-xl">
               {theme === 'light' ? '☀️' : '🌙'}
             </button>
@@ -161,7 +139,7 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in duration-700 text-center">
             <div className="space-y-2">
               <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300">Estudio Bíblico IA</h2>
-              <p className="text-slate-500 font-medium">Herramientas modulares para una vida espiritual profunda.</p>
+              <p className="text-slate-500 font-medium">Gestiona tu estudio diario con inteligencia artificial.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
@@ -170,19 +148,11 @@ const App: React.FC = () => {
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Motor de Inteligencia</label>
                     <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-                      <button 
-                        onClick={() => setAiProvider('gemini')}
-                        className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center ${aiProvider === 'gemini' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400'}`}
-                      >
-                        Gemini 3 Pro
-                        <span className="text-[7px] opacity-60 tracking-[0.2em]">Oficial</span>
+                      <button onClick={() => setAiProvider('gemini')} className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center ${aiProvider === 'gemini' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
+                        Gemini 3 Pro <span className="text-[7px] opacity-60 tracking-[0.2em]">Oficial</span>
                       </button>
-                      <button 
-                        onClick={() => setAiProvider('gemma')}
-                        className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center ${aiProvider === 'gemma' ? 'bg-teal-500 text-white shadow-md' : 'text-slate-500 hover:text-teal-600 dark:hover:text-teal-400'}`}
-                      >
-                        Gemma 3
-                        <span className="text-[7px] opacity-60 tracking-[0.2em]">Open Source</span>
+                      <button onClick={() => setAiProvider('gemma')} className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center ${aiProvider === 'gemma' ? 'bg-teal-500 text-white shadow-md' : 'text-slate-500 hover:text-teal-600 dark:hover:text-teal-400'}`}>
+                        Gemma 3 <span className="text-[7px] opacity-60 tracking-[0.2em]">Open Source</span>
                       </button>
                     </div>
                   </div>
@@ -192,7 +162,13 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Dificultad</label>
                       <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
                         {(['easy', 'medium', 'hard'] as QuizDifficulty[]).map(d => (
-                          <button key={d} onClick={() => setDifficulty(d)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${difficulty === d ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}>{d === 'easy' ? 'P' : d === 'medium' ? 'M' : 'A'}</button>
+                          <button 
+                            key={d} 
+                            onClick={() => setDifficulty(d)} 
+                            className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${difficulty === d ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}
+                          >
+                            {d === 'easy' ? 'F' : d === 'medium' ? 'M' : 'D'}
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -200,21 +176,24 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Retos</label>
                       <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
                         {[3, 5, 10].map(n => (
-                          <button key={n} onClick={() => setNumQuestions(n)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${numQuestions === n ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}>{n}</button>
+                          <button 
+                            key={n} 
+                            onClick={() => setNumQuestions(n)} 
+                            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${numQuestions === n ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}
+                          >
+                            {n}
+                          </button>
                         ))}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <textarea 
-                  value={input} onChange={(e) => setInput(e.target.value)} placeholder="Introduce pasaje (Ej: Romanos 8:1 o Juan 3)..." 
-                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all focus:bg-white dark:focus:bg-slate-900" 
-                />
+                <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Introduce un pasaje (Ej: Romanos 8:1)..." className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all focus:bg-white dark:focus:bg-slate-900 mb-4" />
                 
                 {errorMessage && (
-                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl text-red-600 dark:text-red-400 text-[10px] flex items-center gap-2">
-                    <span>⚠️</span> {errorMessage}
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-900/30 rounded-2xl text-red-700 dark:text-red-400 text-xs animate-in shake">
+                    {errorMessage}
                   </div>
                 )}
                 
@@ -227,25 +206,17 @@ const App: React.FC = () => {
                 <div>
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2">📅 Planes de Lectura</h3>
                   <div className="space-y-4">
-                    <input type="text" value={planTopic} onChange={(e) => setPlanTopic(e.target.value)} placeholder="Ej: Ansiedad, Gozo, Familia..." className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none focus:ring-2 focus:ring-teal-400" />
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['intensive', 'weekly', 'monthly'] as PlanDuration[]).map(d => (
-                        <button key={d} onClick={() => setPlanDuration(d)} className={`py-2.5 rounded-xl text-[9px] font-black uppercase border transition-all ${planDuration === d ? 'bg-teal-400 border-teal-400 text-slate-900' : 'border-white/10 text-white/50'}`}>{d === 'intensive' ? 'Intenso' : d === 'weekly' ? 'Semana' : 'Mes'}</button>
-                      ))}
-                    </div>
+                    <input type="text" value={planTopic} onChange={(e) => setPlanTopic(e.target.value)} placeholder="Ej: Gozo, Ansiedad, Familia..." className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none focus:ring-2 focus:ring-teal-400" />
                   </div>
                 </div>
                 <Button variant="secondary" className="bg-teal-400 text-slate-900 py-4 w-full mt-6" onClick={async () => {
-                    setStatus('loading_plan');
-                    try {
-                      const p = await generateReadingPlan(planTopic, planDuration, aiProvider);
-                      setPlanData(p);
-                      setStatus('viewing_plan');
-                    } catch (e: any) {
-                      setErrorMessage(e.message);
-                      setStatus('error');
-                    }
-                  }} disabled={!planTopic.trim() || status === 'loading_plan'} isLoading={status === 'loading_plan'}>Crear Plan</Button>
+                  setStatus('loading_plan');
+                  try {
+                    const p = await generateReadingPlan(planTopic, planDuration, aiProvider);
+                    setPlanData(p);
+                    setStatus('viewing_plan');
+                  } catch (e: any) { setErrorMessage(e.message); setStatus('error'); }
+                }} disabled={!planTopic.trim() || status === 'loading_plan'} isLoading={status === 'loading_plan'}>Crear Plan</Button>
               </div>
             </div>
           </div>
@@ -253,13 +224,9 @@ const App: React.FC = () => {
 
         {showContent && data && (
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
-            <div className="text-center">
-               <div className="flex justify-center gap-2 mb-3">
-                 <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-200 dark:border-indigo-800">{difficulty.toUpperCase()}</span>
-                 <span className="px-3 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-teal-200 dark:border-teal-800">{data.quiz.length} Retos</span>
-               </div>
+             <div className="text-center">
                <h2 className="text-5xl font-serif font-bold leading-tight">{data.title}</h2>
-               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-xs mt-3">{input}</p>
+               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-xs mt-3">{data.keyVerses[0] || input}</p>
             </div>
             
             <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto shadow-inner sticky top-20 z-40">
@@ -296,12 +263,11 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Modales - Se renderizan al final para estar sobre todo */}
       {status === 'store' && <Store stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: prev.emeralds - 50, protectors: prev.protectors + 1})); }} />}
       {status === 'calendar' && <StreakCalendar stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} />}
       {status === 'reminders' && <ReminderSettings stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onSetReminder={(time) => setStats(prev => ({...prev, reminderTime: time}))} />}
 
-      <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-2 text-slate-400 relative z-10">
+      <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 relative z-10">
         <p className="text-sm font-bold tracking-widest uppercase">Vida en la Palabra © 2025</p>
       </footer>
     </div>
