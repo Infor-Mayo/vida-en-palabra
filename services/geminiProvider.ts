@@ -2,14 +2,14 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const callGemini = async (prompt: string, systemInstruction: string, schema?: any) => {
-  // Intentamos obtener la llave específica de Gemini, si no, usamos la genérica del entorno
+  // Buscamos prioritariamente la clave específica de Gemini
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
   
-  if (!apiKey) {
+  if (!apiKey || apiKey === "undefined") {
     throw new Error("No se encontró la configuración para Gemini (Falta GEMINI_API_KEY o API_KEY).");
   }
 
-  const ai = new GoogleGenAI({ apiKey: apiKey });
+  const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',

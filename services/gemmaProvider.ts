@@ -3,18 +3,21 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export const callGemma = async (prompt: string, system: string): Promise<string> => {
   try {
-    // Usamos específicamente la llave para OpenRouter solicitada
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    // Buscamos la clave en todas las variantes posibles que el usuario tiene definidas en su entorno
+    const apiKey = process.env.OPENROUTER_API_KEY || 
+                   process.env.OpenRouter_API_KEY || 
+                   process.env.API_KEY;
     
-    if (!apiKey || apiKey.trim() === "") {
-      throw new Error("Configuración incompleta: No se encontró la variable OPENROUTER_API_KEY para usar Gemma.");
+    // Verificamos que la clave exista y no sea un string vacío o el texto "undefined"
+    if (!apiKey || apiKey.trim() === "" || apiKey === "undefined") {
+      throw new Error("Configuración incompleta: No se encontró una clave válida en OPENROUTER_API_KEY o OpenRouter_API_KEY.");
     }
 
     const response = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: { 
         "Content-Type": "application/json", 
-        "Authorization": `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${apiKey.trim()}`, // .trim() es vital para evitar errores 401
         "HTTP-Referer": window.location.origin,
         "X-Title": "Vida Palabra"
       },
@@ -34,11 +37,11 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
         const errorData = await response.json();
         errorMessage = errorData.error?.message || errorMessage;
       } catch (e) {
-        // No es JSON, usar statusText
+        // No es JSON
       }
       
       if (response.status === 401) {
-        throw new Error(`Error de Autenticación OpenRouter (401): La clave en OPENROUTER_API_KEY es inválida.`);
+        throw new Error(`Error de Autenticación OpenRouter (401): La clave en el entorno no está siendo aceptada o no se envió correctamente. Asegúrate de que la clave en el panel sea correcta.`);
       }
       
       throw new Error(`OpenRouter Error (${response.status}): ${errorMessage}`);
@@ -51,7 +54,7 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
 
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("Gemma no devolvió contenido. Intenta con un pasaje más breve.");
+      throw new Error("Gemma no devolvió contenido. Intenta de nuevo.");
     }
 
     return content;
