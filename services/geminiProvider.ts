@@ -1,9 +1,15 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { QuizDifficulty } from "../types";
 
 export const callGemini = async (prompt: string, systemInstruction: string, schema?: any) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Intentamos obtener la llave específica de Gemini, si no, usamos la genérica del entorno
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("No se encontró la configuración para Gemini (Falta GEMINI_API_KEY o API_KEY).");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey });
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',

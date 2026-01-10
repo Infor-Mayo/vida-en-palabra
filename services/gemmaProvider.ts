@@ -3,11 +3,18 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export const callGemma = async (prompt: string, system: string): Promise<string> => {
   try {
+    // Usamos específicamente la llave para OpenRouter solicitada
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    
+    if (!apiKey || apiKey.trim() === "") {
+      throw new Error("Configuración incompleta: No se encontró la variable OPENROUTER_API_KEY para usar Gemma.");
+    }
+
     const response = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: { 
         "Content-Type": "application/json", 
-        "Authorization": `Bearer ${process.env.OpenRouter_API_KEY || ''}`,
+        "Authorization": `Bearer ${apiKey}`,
         "HTTP-Referer": window.location.origin,
         "X-Title": "Vida Palabra"
       },
@@ -22,9 +29,19 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
     });
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const msg = errorData.error?.message || response.statusText;
-      throw new Error(`OpenRouter Error (${response.status}): ${msg}`);
+      let errorMessage = response.statusText;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error?.message || errorMessage;
+      } catch (e) {
+        // No es JSON, usar statusText
+      }
+      
+      if (response.status === 401) {
+        throw new Error(`Error de Autenticación OpenRouter (401): La clave en OPENROUTER_API_KEY es inválida.`);
+      }
+      
+      throw new Error(`OpenRouter Error (${response.status}): ${errorMessage}`);
     }
 
     const data = await response.json();
@@ -34,13 +51,13 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
 
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("Gemma no devolvió contenido. Intenta con un pasaje más breve o cambia de modelo.");
+      throw new Error("Gemma no devolvió contenido. Intenta con un pasaje más breve.");
     }
 
     return content;
   } catch (error: any) {
-    if (error.name === 'TypeError') {
-      throw new Error("Error de conexión: No se pudo contactar con OpenRouter. Revisa tu internet.");
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      throw new Error("Error de conexión: No se pudo contactar con OpenRouter.");
     }
     throw error;
   }
