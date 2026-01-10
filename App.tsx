@@ -68,8 +68,9 @@ const App: React.FC = () => {
       // Bonus por completar el estudio
       setStats(prev => ({...prev, emeralds: prev.emeralds + 10}));
     } catch (error: any) {
-      console.error("Error de la aplicación:", error);
-      setErrorMessage(error.message || "No se pudo conectar con el servicio de IA. Verifica tu conexión o las claves de API.");
+      console.error("Error en handleGenerate:", error);
+      const msg = error.message || "Error inesperado al conectar con la IA.";
+      setErrorMessage(msg);
       setStatus('error');
     }
   };
@@ -131,10 +132,14 @@ const App: React.FC = () => {
                 />
                 
                 {errorMessage && (
-                  <div className="mt-4 p-5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-2xl border border-red-100 dark:border-red-900/50 flex flex-col gap-3">
+                  <div className="mt-4 p-5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-2xl border border-red-100 dark:border-red-900/50 flex flex-col gap-3 animate-bounce">
                     <div className="flex gap-2 items-start">
                       <span className="text-lg">⚠️</span>
-                      <span className="break-words">{errorMessage}</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-bold">Error de Configuración:</span>
+                        <span className="break-words opacity-90">{errorMessage}</span>
+                        <p className="text-[10px] mt-2 opacity-70 uppercase tracking-tighter">Verifica que las variables API_KEY y OPENROUTER_API_KEY estén configuradas en Railway.</p>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -216,7 +221,7 @@ const App: React.FC = () => {
                 <button 
                   key={tab} 
                   onClick={() => setActiveTab(tab as any)}
-                  className={`flex-grow py-3 px-4 rounded-2xl text-[11px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-md' : 'text-slate-500'}`}
+                  className={`flex-grow py-3 px-4 rounded-2xl text-[11px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-md' : 'text-slate-50'}`}
                 >
                   {tab === 'study' ? 'Estudio' : tab === 'quiz' ? 'Reto' : 'Diario'}
                 </button>

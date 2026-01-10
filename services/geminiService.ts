@@ -72,53 +72,28 @@ const RESPONSE_SCHEMA = (numQuestions: number) => ({
 
 const cleanJsonResponse = (rawText: string): any => {
   try {
-    const startIdx = rawText.indexOf('{');
-    const endIdx = rawText.lastIndexOf('}');
-    if (startIdx === -1 || endIdx === -1) throw new Error("Formato JSON no encontrado");
-    const jsonStr = rawText.substring(startIdx, endIdx + 1);
-    return JSON.parse(jsonStr);
+    let cleaned = rawText.trim();
+    if (cleaned.includes('```')) {
+      const match = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) cleaned = match[1];
+    }
+    const startIdx = cleaned.indexOf('{');
+    const endIdx = cleaned.lastIndexOf('}');
+    if (startIdx === -1 || endIdx === -1) throw new Error("JSON no encontrado");
+    return JSON.parse(cleaned.substring(startIdx, endIdx + 1));
   } catch (e) {
-    console.error("Error parseando JSON:", rawText);
-    throw new Error("La respuesta de la IA no pudo ser procesada como datos válidos.");
+    throw new Error("La IA no devolvió un formato de datos válido. Intenta con otro pasaje.");
   }
-};
-
-const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("Clave de OpenRouter (OPENROUTER_API_KEY) no configurada.");
-
-  const response = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "Vida Palabra Devocional",
-    },
-    body: JSON.stringify({
-      model: "google/gemma-3-27b-it:free",
-      messages: messages,
-      temperature: 0.3,
-    }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    const errorMsg = data.error?.message || `Error ${response.status}`;
-    throw new Error(`OpenRouter Error: ${errorMsg}`);
-  }
-
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("No se recibió contenido de Gemma.");
-  return cleanJsonResponse(content);
 };
 
 export const generateDevotional = async (passage: string, provider: AIProvider, numQuestions: number = 10): Promise<DevotionalData> => {
   if (provider === 'gemini') {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    if (!process.env.API_KEY) throw new Error("La variable de entorno API_KEY no está configurada.");
+    
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ parts: [{ text: `Realiza un estudio devocional profundo y académico del pasaje: "${passage}"` }] }],
+      contents: [{ parts: [{ text: `Estudio profundo de: "${passage}"` }] }],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION(numQuestions),
         responseMimeType: "application/json",
@@ -126,14 +101,31 @@ export const generateDevotional = async (passage: string, provider: AIProvider, 
       }
     });
     
-    if (!response.text) throw new Error("Gemini no devolvió texto.");
+    if (!response.text) throw new Error("Gemini no pudo procesar la solicitud.");
     return JSON.parse(response.text);
   } else {
-    const messages = [
-      { role: "system", content: SYSTEM_INSTRUCTION(numQuestions) },
-      { role: "user", content: `Estudio bíblico interactivo para: "${passage}"` }
-    ];
-    return await fetchFromOpenRouter(messages);
+    const orKey = process.env.OPENROUTER_API_KEY;
+    if (!orKey) throw new Error("La variable OPENROUTER_API_KEY no está configurada.");
+
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${orKey}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemma-3-27b-it:free",
+        messages: [
+          { role: "system", content: SYSTEM_INSTRUCTION(numQuestions) },
+          { role: "user", content: `Analiza: "${passage}"` }
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || "Error con Gemma");
+    return cleanJsonResponse(data.choices[0].message.content);
   }
 };
 
@@ -141,7 +133,8 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration,
   const prompt = `Crea un plan de lectura bíblica temático sobre "${topic}" para una duración de "${duration}". Responde SOLO en JSON.`;
   
   if (provider === 'gemini') {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    if (!process.env.API_KEY) throw new Error("API_KEY no configurada.");
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
@@ -172,10 +165,20 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration,
     });
     return JSON.parse(response.text || "{}");
   } else {
-    const messages = [
-      { role: "system", content: "Eres un experto teólogo que genera planes de lectura en JSON." },
-      { role: "user", content: prompt }
-    ];
-    return await fetchFromOpenRouter(messages);
+    const orKey = process.env.OPENROUTER_API_KEY;
+    if (!orKey) throw new Error("OPENROUTER_API_KEY no configurada.");
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${orKey}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemma-3-27b-it:free",
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data = await response.json();
+    return cleanJsonResponse(data.choices[0].message.content);
   }
 };

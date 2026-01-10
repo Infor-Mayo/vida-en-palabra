@@ -20,22 +20,13 @@
             }
         }
         
-        // Bloqueo de parpadeo (Theme script)
         (function() {
             const theme = localStorage.getItem('app_theme_preference') || 'system';
             const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            if (isDark) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
+            if (isDark) document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
         })();
     </script>
-    <style>
-        body {
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-    </style>
 <script type="importmap">
 {
   "imports": {
