@@ -7,50 +7,51 @@ export const cleanJsonResponse = (rawText: string): any => {
   try {
     let cleaned = rawText.trim();
     
-    // Eliminar bloques de código markdown si existen
-    if (cleaned.includes('```')) {
-      cleaned = cleaned.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
-    }
+    // 1. Eliminar bloques de código markdown
+    cleaned = cleaned.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     
-    // Buscar el primer '{' y el último '}' por si el modelo incluyó texto basura
+    // 2. Localizar el objeto JSON real. 
+    // Si hay basura o repeticiones (como el bug de "Amén"), buscamos el último cierre de llave válido.
     const startIdx = cleaned.indexOf('{');
     const endIdx = cleaned.lastIndexOf('}');
     
     if (startIdx === -1 || endIdx === -1) {
-      // Intentar buscar corchetes por si es un array (para planes de lectura)
-      const startArrIdx = cleaned.indexOf('[');
-      const endArrIdx = cleaned.lastIndexOf(']');
-      if (startArrIdx !== -1 && endArrIdx !== -1) {
-          cleaned = cleaned.substring(startArrIdx, endArrIdx + 1);
-          return JSON.parse(cleaned);
+      // Intentar con arrays
+      const startArr = cleaned.indexOf('[');
+      const endArr = cleaned.lastIndexOf(']');
+      if (startArr !== -1 && endArr !== -1) {
+        return JSON.parse(cleaned.substring(startArr, endArr + 1));
       }
-      throw new Error("No se encontró un objeto JSON válido en la respuesta.");
+      throw new Error("No se encontró estructura JSON.");
     }
     
-    cleaned = cleaned.substring(startIdx, endIdx + 1);
-    return JSON.parse(cleaned);
+    const jsonCandidate = cleaned.substring(startIdx, endIdx + 1);
+    
+    // 3. Intento de parseo
+    return JSON.parse(jsonCandidate);
   } catch (e: any) {
-    console.error("Error al parsear JSON. Texto original:", rawText);
-    throw new Error(`Error de formato (JSON): ${e.message}. El modelo envió datos corruptos. Prueba con un pasaje más corto.`);
+    // Si el parseo falla porque la IA metió texto basura dentro de un campo (como viste en tu error),
+    // intentamos una limpieza de emergencia de caracteres de control.
+    try {
+        let fallback = rawText.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+        const s = fallback.indexOf('{');
+        const eIdx = fallback.lastIndexOf('}');
+        return JSON.parse(fallback.substring(s, eIdx + 1));
+    } catch (innerError) {
+        console.error("Error fatal de JSON. Texto original:", rawText);
+        throw new Error(`El servidor de IA generó un texto corrupto o demasiado largo. Por favor, intenta de nuevo con un pasaje más corto.`);
+    }
   }
 };
 
 export const handleServiceError = (error: any, context: string = "proceso"): never => {
-  // Errores que ya vienen con formato específico
-  if (
-    error.message.includes("Error de formato") || 
-    error.message.includes("OpenRouter") || 
-    error.message.includes("La IA devolvió") ||
-    error.message.includes("Gemma")
-  ) {
+  if (error.message.includes("Clave") || error.message.includes("Configuración") || error.message.includes("NO DETECTA")) {
     throw error;
   }
-
-  // Errores de cuota de Gemini
-  if (error.message?.toLowerCase().includes("429") || error.message?.toLowerCase().includes("quota")) {
-    throw new Error("Límite de cuota alcanzado. Cambia al modelo Gemma arriba o espera un minuto.");
+  
+  if (error.message.includes("429") || error.message.includes("quota")) {
+    throw new Error("Límite de cuota excedido. Prueba cambiando de modelo (Gemma/Gemini) en la configuración.");
   }
   
-  // Error genérico con contexto
-  throw new Error(`Error en el ${context}: ${error.message || "Desconocido"}. Intenta con un pasaje más breve.`);
+  throw new Error(`Error en ${context}: ${error.message}`);
 };

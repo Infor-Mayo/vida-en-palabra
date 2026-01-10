@@ -2,47 +2,34 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export const callGemma = async (prompt: string, system: string): Promise<string> => {
-  // 1. Diagnóstico preventivo: Intentamos capturar los metadatos de las variables
-  const getMeta = (keyName: string) => {
-    const val = (process.env as any)[keyName];
-    return {
-      exists: !!val && val !== "undefined",
-      type: typeof val,
-      len: val ? String(val).length : 0,
-      prefix: val && String(val).startsWith("sk-or-") ? "Correcto (sk-or-)" : "Incorrecto o no empieza con sk-or-"
-    };
-  };
+  // Acceso directo (algunos entornos no permiten iterar process.env pero sí acceder por nombre)
+  const key1 = (process.env as any).OPENROUTER_API_KEY;
+  const key2 = (process.env as any).OpenRouter_API_KEY;
+  const key3 = (process.env as any).API_KEY;
 
-  const diag = {
-    OR_MAYA: getMeta("OPENROUTER_API_KEY"),
-    OR_CAMEL: getMeta("OpenRouter_API_KEY"),
-    API_GENERIC: getMeta("API_KEY")
-  };
-
-  // 2. Selección de la clave (Prioridad OpenRouter)
   let apiKey = "";
   let source = "";
 
-  if (diag.OR_MAYA.exists) {
-    apiKey = String((process.env as any)["OPENROUTER_API_KEY"]).trim();
+  // Prioridad: 1. Claves específicas, 2. API_KEY genérica si tiene el formato correcto
+  if (key1 && key1 !== "undefined" && key1.trim().startsWith("sk-or-")) {
+    apiKey = key1.trim();
     source = "OPENROUTER_API_KEY";
-  } else if (diag.OR_CAMEL.exists) {
-    apiKey = String((process.env as any)["OpenRouter_API_KEY"]).trim();
+  } else if (key2 && key2 !== "undefined" && key2.trim().startsWith("sk-or-")) {
+    apiKey = key2.trim();
     source = "OpenRouter_API_KEY";
-  } else if (diag.API_GENERIC.exists && String((process.env as any)["API_KEY"]).startsWith("sk-or-")) {
-    apiKey = String((process.env as any)["API_KEY"]).trim();
-    source = "API_KEY (Detectada como OpenRouter)";
+  } else if (key3 && key3.trim().startsWith("sk-or-")) {
+    apiKey = key3.trim();
+    source = "API_KEY";
   }
 
-  // 3. Si no hay clave válida, lanzamos el informe técnico detallado
-  if (!apiKey || apiKey === "") {
+  if (!apiKey) {
     throw new Error(
-      `SISTEMA NO DETECTA CLAVE DE OPENROUTER:\n\n` +
-      `INFORME TÉCNICO DE VARIABLES:\n` +
-      `• OPENROUTER_API_KEY: [Existe: ${diag.OR_MAYA.exists}, Tipo: ${diag.OR_MAYA.type}, Longitud: ${diag.OR_MAYA.len}]\n` +
-      `• OpenRouter_API_KEY: [Existe: ${diag.OR_CAMEL.exists}, Tipo: ${diag.OR_CAMEL.type}, Longitud: ${diag.OR_CAMEL.len}]\n` +
-      `• API_KEY (Genérica): [Existe: ${diag.API_GENERIC.exists}, Tipo: ${diag.API_GENERIC.type}, Longitud: ${diag.API_GENERIC.len}]\n\n` +
-      `Si los valores dicen 'false' o '0', el entorno no está pasando las variables al código.`
+      `SISTEMA NO DETECTA CLAVE DE OPENROUTER VÁLIDA:\n\n` +
+      `ESTADO TÉCNICO:\n` +
+      `• OPENROUTER_API_KEY: ${key1 ? `Detectada (L:${key1.length})` : 'No definida'}\n` +
+      `• OpenRouter_API_KEY: ${key2 ? `Detectada (L:${key2.length})` : 'No definida'}\n` +
+      `• API_KEY: ${key3 ? `Detectada (L:${key3.length})` : 'No definida'}\n\n` +
+      `NOTA: Si usas OpenRouter, la clave DEBE empezar con 'sk-or-'.`
     );
   }
 
@@ -61,26 +48,20 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
           { "role": "system", "content": system },
           { "role": "user", "content": prompt }
         ],
-        "temperature": 0.3,
+        "temperature": 0.2, // Reducido para evitar alucinaciones
+        "max_tokens": 3000
       }),
     });
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      if (response.status === 401) {
-        throw new Error(
-          `Error 401 (No Autorizado):\n` +
-          `Fuente: ${source} (Longitud: ${apiKey.length})\n` +
-          `La clave se envió pero OpenRouter la rechazó. Verifica que la clave sea de OpenRouter y no de Gemini.`
-        );
-      }
-      throw new Error(`Error OpenRouter (${response.status}): ${errorData.error?.message || response.statusText}`);
+      throw new Error(`OpenRouter (${response.status}): ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
     return data.choices?.[0]?.message?.content || "";
   } catch (error: any) {
-    if (error.message.includes("SISTEMA NO DETECTA") || error.message.includes("401")) throw error;
-    throw new Error(`Fallo de conexión con Gemma (${source}): ${error.message}`);
+    if (error.message.includes("NO DETECTA")) throw error;
+    throw new Error(`Error con Gemma (${source}): ${error.message}`);
   }
 };
