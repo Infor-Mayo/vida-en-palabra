@@ -2,23 +2,21 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const callGemini = async (prompt: string, systemInstruction: string, schema?: any) => {
-  let source = "ninguna";
-  let apiKey = "";
-
-  // Prioridad: 1. GEMINI_API_KEY, 2. API_KEY (si empieza por AIza)
-  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "undefined") {
-    apiKey = process.env.GEMINI_API_KEY.trim();
-    source = "GEMINI_API_KEY";
-  } else if (process.env.API_KEY && process.env.API_KEY !== "undefined") {
-    const val = process.env.API_KEY.trim();
-    if (val.startsWith("AIza")) {
-      apiKey = val;
-      source = "API_KEY (Detectada como Gemini)";
+  const getGeminiKey = () => {
+    const env = process.env as any;
+    // Preferencia a GEMINI_API_KEY si existe, si no, API_KEY
+    const key = env.GEMINI_API_KEY || env.API_KEY;
+    
+    if (key && key !== "undefined" && key.trim().length > 0) {
+      return key.trim();
     }
-  }
+    return null;
+  };
+
+  const apiKey = getGeminiKey();
 
   if (!apiKey) {
-    throw new Error("No se encontró una clave válida de Gemini (AIza...). Revisa tu configuración.");
+    throw new Error("No se detectó ninguna clave en [API_KEY]. Revisa la configuración de tu servidor.");
   }
 
   try {
@@ -35,6 +33,9 @@ export const callGemini = async (prompt: string, systemInstruction: string, sche
 
     return response.text || "";
   } catch (error: any) {
-    throw new Error(`Error en Gemini (${source}): ${error.message}`);
+    if (error.message.includes("API key not valid")) {
+       throw new Error("La clave en [API_KEY] no es válida para Gemini. Asegúrate de que empiece con AIza...");
+    }
+    throw new Error(`Error en Gemini: ${error.message}`);
   }
 };
