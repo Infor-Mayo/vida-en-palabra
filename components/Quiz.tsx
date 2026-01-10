@@ -45,7 +45,7 @@ export const Quiz: React.FC<QuizProps> = ({
     if (!q) return;
     setIsAnswered(false);
     setSelectedIndices([]);
-    setShuffledRights([]); // Resetear siempre al cambiar de pregunta
+    setShuffledRights([]);
     
     if (q.type === 'ordering' && q.orderedItems) {
       setOrderState([...q.orderedItems].sort(() => Math.random() - 0.5));
@@ -72,9 +72,14 @@ export const Quiz: React.FC<QuizProps> = ({
     );
   }
 
+  // Sanitación de opciones para True/False
+  const displayOptions = q.type === 'true-false' 
+    ? (q.options && q.options.length >= 2 ? q.options : ['Verdadero', 'Falso'])
+    : q.options;
+
   // Validación de datos corruptos de la IA
   const isBrokenMatching = q.type === 'matching' && (!q.pairs || q.pairs.length === 0);
-  const isBrokenChoice = (q.type === 'multiple-choice' || q.type === 'multiple-selection') && (!q.options || q.options.length === 0);
+  const isBrokenChoice = (q.type === 'multiple-choice' || q.type === 'multiple-selection') && (!displayOptions || displayOptions.length === 0);
 
   if (isBrokenMatching || isBrokenChoice) {
     return (
@@ -89,14 +94,14 @@ export const Quiz: React.FC<QuizProps> = ({
     let isCorrect = false;
     let answerText = "";
 
-    if (q.type === 'multiple-choice') {
+    if (q.type === 'multiple-choice' || q.type === 'true-false') {
       isCorrect = selectedIndices[0] === q.correctIndex;
-      answerText = q.options ? q.options[selectedIndices[0]] : "";
+      answerText = displayOptions ? displayOptions[selectedIndices[0]] : "";
     } else if (q.type === 'multiple-selection') {
       const sortedSelected = [...selectedIndices].sort();
       const sortedCorrect = [...(q.correctIndices || [])].sort();
       isCorrect = JSON.stringify(sortedSelected) === JSON.stringify(sortedCorrect);
-      answerText = selectedIndices.map(i => q.options?.[i]).join(', ');
+      answerText = selectedIndices.map(i => displayOptions?.[i]).join(', ');
     } else if (q.type === 'ordering') {
       isCorrect = JSON.stringify(orderState) === JSON.stringify(q.orderedItems);
       answerText = orderState.join(' -> ');
@@ -131,7 +136,9 @@ export const Quiz: React.FC<QuizProps> = ({
   const isConfirmDisabled = () => {
     if (isAnswered) return true;
     switch (q.type) {
-      case 'multiple-choice': return selectedIndices.length === 0;
+      case 'multiple-choice': 
+      case 'true-false':
+        return selectedIndices.length === 0;
       case 'multiple-selection': return selectedIndices.length === 0;
       case 'matching': return Object.keys(matchingState.paired).length < (q.pairs?.length || 0);
       case 'fill-in-the-blanks': return blankStates.some(b => !b.trim());
@@ -234,7 +241,27 @@ export const Quiz: React.FC<QuizProps> = ({
           <textarea disabled={isAnswered} value={answers[currentIdx] || ""} onChange={(e) => onAnswerChange?.(currentIdx, e.target.value)} className="w-full h-40 p-6 rounded-3xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 outline-none transition-all resize-none shadow-inner" placeholder="Escribe tu reflexión..." />
         )}
 
-        {(q.type === 'multiple-choice' || q.type === 'multiple-selection') && q.options?.map((opt, idx) => (
+        {q.type === 'true-false' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             {displayOptions?.map((opt, idx) => (
+                <button 
+                  key={idx} 
+                  disabled={isAnswered} 
+                  onClick={() => setSelectedIndices([idx])}
+                  className={`p-8 rounded-[2rem] border-4 transition-all flex flex-col items-center justify-center gap-2 ${
+                    selectedIndices.includes(idx) 
+                      ? idx === 0 ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'border-rose-500 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400'
+                      : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-4xl">{idx === 0 ? '✅' : '❌'}</span>
+                  <span className="font-black uppercase tracking-widest">{opt}</span>
+                </button>
+             ))}
+          </div>
+        )}
+
+        {(q.type === 'multiple-choice' || q.type === 'multiple-selection') && displayOptions?.map((opt, idx) => (
           <button key={idx} disabled={isAnswered} onClick={() => { if (q.type === 'multiple-choice') setSelectedIndices([idx]); else setSelectedIndices(prev => selectedIndices.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]); }} className={`w-full mb-3 text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${selectedIndices.includes(idx) ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-transparent bg-slate-50 dark:bg-slate-800'}`}>
             <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${selectedIndices.includes(idx) ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-700 text-slate-400'}`}>{String.fromCharCode(65 + idx)}</span>
             <span className="font-semibold text-sm">{opt}</span>

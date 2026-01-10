@@ -5,7 +5,8 @@ export type QuizQuestionType =
   | 'matching' 
   | 'ordering' 
   | 'fill-in-the-blanks' 
-  | 'open-ended';
+  | 'open-ended'
+  | 'true-false';
 
 export type QuizDifficulty = 'easy' | 'medium' | 'hard';
 

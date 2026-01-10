@@ -74,6 +74,7 @@ RESPONDE EXCLUSIVAMENTE CON JSON PURO.`;
     return `${base}
 ESTRUCTURA DE RETOS (EJEMPLOS):
 - Si type="multiple-choice": usar "options": ["A", "B"] y "correctIndex": 0.
+- Si type="true-false": usar "options": ["Verdadero", "Falso"] y "correctIndex": 0 (verdadero) o 1 (falso).
 - Si type="matching": usar "pairs": [{"left": "Termino", "right": "Definicion"}].
 - Si type="fill-in-the-blanks": usar "textWithBlanks": "El [blank] es amor" y "blankAnswers": ["Dios"].
 
@@ -85,6 +86,7 @@ JSON COMPLETO DEBE SEGUIR ESTA LLAVE:
   "historicalContext": "...",
   "keyVerses": ["..."],
   "quiz": [
+    {"type": "true-false", "question": "...", "options": ["Verdadero", "Falso"], "correctIndex": 0, "explanation": "..."},
     {"type": "multiple-choice", "question": "...", "options": ["..."], "correctIndex": 0, "explanation": "..."},
     {"type": "matching", "question": "...", "pairs": [{"left": "...", "right": "..."}], "explanation": "..."}
   ],
