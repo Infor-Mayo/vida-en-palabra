@@ -7,6 +7,8 @@ export type QuizQuestionType =
   | 'fill-in-the-blanks' 
   | 'open-ended';
 
+export type QuizDifficulty = 'easy' | 'medium' | 'hard';
+
 export interface QuizQuestion {
   type: QuizQuestionType;
   question: string;
@@ -56,24 +58,13 @@ export interface DevotionalData {
   dailyPlan: DailyPlanDay[];
 }
 
-export interface HistoryItem {
-  id: string;
-  title: string;
-  passage: string;
-  timestamp: number;
-}
-
-export interface FavoriteItem {
-  id: string;
-  title: string;
-  passage: string;
-}
-
 export interface UserStats {
   streak: number;
   lastStudyDate: string | null;
+  studyHistory: string[]; // Fechas en formato YYYY-MM-DD
   emeralds: number;
   protectors: number;
+  reminderTime: string | null;
 }
 
-export type AppStatus = 'idle' | 'loading' | 'content' | 'error' | 'viewing_plan' | 'loading_plan' | 'viewing_history' | 'viewing_favorites' | 'store';
+export type AppStatus = 'idle' | 'loading' | 'content' | 'error' | 'viewing_plan' | 'loading_plan' | 'store' | 'calendar' | 'reminders';

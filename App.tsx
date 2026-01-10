@@ -1,17 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { generateDevotional, generateReadingPlan } from './services/geminiService';
-import { AppStatus, DevotionalData, ReadingPlan, PlanDuration, UserStats, AIProvider } from './types';
+import { AppStatus, DevotionalData, ReadingPlan, PlanDuration, UserStats, AIProvider, QuizDifficulty } from './types';
 import { Button } from './components/Button';
 import { Quiz } from './components/Quiz';
 import { Journal } from './components/Journal';
 import { ReadingPlanView } from './components/ReadingPlanView';
 import { DailyGuide } from './components/DailyGuide';
-import { GamificationHeader, Store } from './components/Gamification';
+import { GamificationHeader, Store, StreakCalendar, ReminderSettings } from './components/Gamification';
 
 const STATS_KEY = 'user_gamification_stats_v1';
 const THEME_KEY = 'app_theme_preference';
 const PROVIDER_KEY = 'app_ai_provider_preference';
+const DIFFICULTY_KEY = 'app_quiz_difficulty_preference';
+const NUM_QUESTIONS_KEY = 'app_num_questions_preference';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -24,18 +26,39 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'study' | 'quiz' | 'journal'>('study');
   const [planTopic, setPlanTopic] = useState('');
   const [planDuration, setPlanDuration] = useState<PlanDuration>('weekly');
-  const [numQuestions] = useState(10);
+  
+  const [difficulty, setDifficulty] = useState<QuizDifficulty>(() => (localStorage.getItem(DIFFICULTY_KEY) as QuizDifficulty) || 'medium');
+  const [numQuestions, setNumQuestions] = useState<number>(() => Number(localStorage.getItem(NUM_QUESTIONS_KEY)) || 5);
+  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemini');
+  const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
   
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [journalAnswers, setJournalAnswers] = useState<Record<number, string>>({});
   const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
-  
-  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemini');
-  const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
-  
+
+  const [stats, setStats] = useState<UserStats>(() => {
+    try {
+      const saved = localStorage.getItem(STATS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return { streak: 0, lastStudyDate: null, studyHistory: [], emeralds: 0, protectors: 0, reminderTime: null };
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  }, [stats]);
+
   useEffect(() => {
     localStorage.setItem(PROVIDER_KEY, aiProvider);
   }, [aiProvider]);
+
+  useEffect(() => {
+    localStorage.setItem(DIFFICULTY_KEY, difficulty);
+  }, [difficulty]);
+
+  useEffect(() => {
+    localStorage.setItem(NUM_QUESTIONS_KEY, numQuestions.toString());
+  }, [numQuestions]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -45,17 +68,36 @@ const App: React.FC = () => {
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
-  const [stats, setStats] = useState<UserStats>(() => {
-    try {
-      const saved = localStorage.getItem(STATS_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return { streak: 0, lastStudyDate: null, emeralds: 0, protectors: 0 };
-  });
+  const updateStreak = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    setStats(prev => {
+      let newStreak = prev.streak;
+      const alreadyStudiedToday = prev.studyHistory.includes(today);
+      
+      if (!alreadyStudiedToday) {
+        if (prev.lastStudyDate === yesterday) {
+          newStreak += 1;
+        } else if (prev.lastStudyDate !== today) {
+          if (prev.protectors > 0 && prev.lastStudyDate) {
+            newStreak += 1;
+          } else {
+            newStreak = 1;
+          }
+        }
+      }
 
-  useEffect(() => {
-    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-  }, [stats]);
+      const newHistory = alreadyStudiedToday ? prev.studyHistory : [...prev.studyHistory, today];
+      
+      return {
+        ...prev,
+        streak: newStreak,
+        lastStudyDate: today,
+        studyHistory: newHistory
+      };
+    });
+  };
 
   const handleGenerate = async (passageStr?: string) => {
     const targetPassage = passageStr || input;
@@ -68,13 +110,17 @@ const App: React.FC = () => {
     setCurrentQuizIdx(0);
     
     try {
-      const result = await generateDevotional(targetPassage, aiProvider, numQuestions);
+      const result = await generateDevotional(targetPassage, aiProvider, numQuestions, difficulty);
       setData(result);
       setStatus('content');
       setActiveTab('study');
-      setStats(prev => ({...prev, emeralds: prev.emeralds + 10}));
+      
+      updateStreak();
+      
+      const reward = (difficulty === 'hard' ? 5 : difficulty === 'medium' ? 3 : 2) * numQuestions;
+      setStats(prev => ({...prev, emeralds: prev.emeralds + reward}));
     } catch (error: any) {
-      setErrorMessage(error.message);
+      setErrorMessage(error.message || "Error al conectar con la IA.");
       setStatus('error');
     }
   };
@@ -92,11 +138,12 @@ const App: React.FC = () => {
             <h1 className="text-xl font-black hidden md:block tracking-tight text-slate-800 dark:text-slate-100">Vida Palabra</h1>
           </div>
           <div className="flex items-center gap-4">
-            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex border border-slate-200 dark:border-slate-700">
-              <button onClick={() => setAiProvider('gemma')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500'}`}>Gemma</button>
-              <button onClick={() => setAiProvider('gemini')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500'}`}>Gemini</button>
-            </div>
-            <GamificationHeader stats={stats} onOpenStore={() => setStatus('store')} />
+            <GamificationHeader 
+              stats={stats} 
+              onOpenStore={() => setStatus('store')} 
+              onOpenCalendar={() => setStatus('calendar')}
+              onOpenReminders={() => setStatus('reminders')}
+            />
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all text-xl">
               {theme === 'light' ? '☀️' : '🌙'}
             </button>
@@ -107,23 +154,84 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto px-4 py-10">
         {isHome && (
           <div className="space-y-12 animate-in fade-in duration-700 text-center">
-            <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300">Tu Compañero Bíblico</h2>
+            <div className="space-y-2">
+              <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300">Estudio Bíblico IA</h2>
+              <p className="text-slate-500 font-medium">Herramientas modulares para una vida espiritual profunda.</p>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col">
-                <h3 className="text-xl font-bold mb-4">📖 Analizar Pasaje</h3>
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col group/card">
+                <div className="space-y-5 mb-6">
+                  {/* Selector de Modelos Restablecido */}
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Motor de Inteligencia</label>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                      <button 
+                        onClick={() => setAiProvider('gemini')}
+                        className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center ${aiProvider === 'gemini' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400'}`}
+                      >
+                        Gemini 3 Pro
+                        <span className="text-[7px] opacity-60 tracking-[0.2em]">Oficial</span>
+                      </button>
+                      <button 
+                        onClick={() => setAiProvider('gemma')}
+                        className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center ${aiProvider === 'gemma' ? 'bg-teal-500 text-white shadow-md' : 'text-slate-500 hover:text-teal-600 dark:hover:text-teal-400'}`}
+                      >
+                        Gemma 3
+                        <span className="text-[7px] opacity-60 tracking-[0.2em]">Open Source</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Dificultad</label>
+                      <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                        {(['easy', 'medium', 'hard'] as QuizDifficulty[]).map(d => (
+                          <button key={d} onClick={() => setDifficulty(d)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${difficulty === d ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}>{d === 'easy' ? 'P' : d === 'medium' ? 'M' : 'A'}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Retos</label>
+                      <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                        {[3, 5, 10].map(n => (
+                          <button key={n} onClick={() => setNumQuestions(n)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${numQuestions === n ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}>{n}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <textarea 
-                  value={input} 
-                  onChange={(e) => setInput(e.target.value)} 
-                  placeholder="Juan 3:16, Salmo 23..." 
-                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px]" 
+                  value={input} onChange={(e) => setInput(e.target.value)} placeholder="Introduce pasaje (Ej: Romanos 8:1 o Juan 3)..." 
+                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all focus:bg-white dark:focus:bg-slate-900" 
                 />
-                {errorMessage && <p className="mt-4 text-red-500 text-sm">{errorMessage}</p>}
-                <Button className="mt-6 w-full py-4" onClick={() => handleGenerate()} disabled={!input.trim() || status === 'loading'} isLoading={status === 'loading'}>Generar Estudio</Button>
+                
+                {errorMessage && (
+                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl text-red-600 dark:text-red-400 text-[10px] flex items-center gap-2">
+                    <span>⚠️</span> {errorMessage}
+                  </div>
+                )}
+                
+                <Button className="mt-6 w-full py-4 text-lg" onClick={() => handleGenerate()} disabled={!input.trim() || status === 'loading'} isLoading={status === 'loading'}>
+                  Iniciar Devocional
+                </Button>
               </div>
-              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col">
-                <h3 className="text-xl font-bold mb-4">📅 Plan de Lectura</h3>
-                <input type="text" value={planTopic} onChange={(e) => setPlanTopic(e.target.value)} placeholder="Tema..." className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white mb-4 outline-none focus:ring-2 focus:ring-teal-400" />
-                <Button variant="secondary" className="mt-auto bg-teal-400 text-slate-900 py-4" onClick={async () => {
+
+              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col justify-between border border-white/5">
+                <div>
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">📅 Planes de Lectura</h3>
+                  <div className="space-y-4">
+                    <input type="text" value={planTopic} onChange={(e) => setPlanTopic(e.target.value)} placeholder="Ej: Ansiedad, Gozo, Familia..." className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none focus:ring-2 focus:ring-teal-400" />
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['intensive', 'weekly', 'monthly'] as PlanDuration[]).map(d => (
+                        <button key={d} onClick={() => setPlanDuration(d)} className={`py-2.5 rounded-xl text-[9px] font-black uppercase border transition-all ${planDuration === d ? 'bg-teal-400 border-teal-400 text-slate-900' : 'border-white/10 text-white/50'}`}>{d === 'intensive' ? 'Intenso' : d === 'weekly' ? 'Semana' : 'Mes'}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <Button variant="secondary" className="bg-teal-400 text-slate-900 py-4 w-full mt-6" onClick={async () => {
                     setStatus('loading_plan');
                     try {
                       const p = await generateReadingPlan(planTopic, planDuration, aiProvider);
@@ -133,7 +241,7 @@ const App: React.FC = () => {
                       setErrorMessage(e.message);
                       setStatus('error');
                     }
-                  }} disabled={!planTopic.trim() || status === 'loading_plan'} isLoading={status === 'loading_plan'}>Diseñar Plan</Button>
+                  }} disabled={!planTopic.trim() || status === 'loading_plan'} isLoading={status === 'loading_plan'}>Crear Plan</Button>
               </div>
             </div>
           </div>
@@ -142,49 +250,36 @@ const App: React.FC = () => {
         {status === 'content' && data && (
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="text-center">
-               <h2 className="text-5xl font-serif font-bold">{data.title}</h2>
-               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-sm mt-2">{input}</p>
+               <div className="flex justify-center gap-2 mb-3">
+                 <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-200 dark:border-indigo-800">{difficulty.toUpperCase()}</span>
+                 <span className="px-3 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-teal-200 dark:border-teal-800">{data.quiz.length} Retos</span>
+               </div>
+               <h2 className="text-5xl font-serif font-bold leading-tight">{data.title}</h2>
+               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-xs mt-3">{input}</p>
             </div>
-            <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto">
+            
+            <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto shadow-inner sticky top-20 z-40">
               {['study', 'quiz', 'journal'].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-grow py-3 px-4 rounded-2xl text-[11px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-md' : 'text-slate-500'}`}>
-                  {tab === 'study' ? 'Estudio' : tab === 'quiz' ? 'Reto' : 'Diario'}
-                </button>
+                <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-grow py-3 px-4 rounded-2xl text-[11px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-md' : 'text-slate-500'}`}>{tab === 'study' ? 'Lectura' : tab === 'quiz' ? 'Retos' : 'Diario'}</button>
               ))}
             </div>
+
             <div className="min-h-[500px]">
               {activeTab === 'study' && (
                 <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
-                  <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] italic font-serif text-2xl text-center shadow-lg">"{data.passageText}"</div>
+                  <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] italic font-serif text-2xl text-center shadow-lg border border-slate-100 dark:border-slate-800 leading-relaxed group relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600 opacity-20"></div>
+                    "{data.passageText}"
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800"><h4 className="font-black text-[10px] text-indigo-50 uppercase mb-4 tracking-[0.2em]">Explicación</h4><p>{data.summary}</p></div>
-                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800"><h4 className="font-black text-[10px] text-teal-500 uppercase mb-4 tracking-[0.2em]">Contexto</h4><p>{data.historicalContext}</p></div>
+                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm"><h4 className="font-black text-[10px] text-indigo-500 uppercase mb-4 tracking-[0.2em]">Explicación</h4><p className="leading-relaxed text-slate-600 dark:text-slate-300">{data.summary}</p></div>
+                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm"><h4 className="font-black text-[10px] text-teal-500 uppercase mb-4 tracking-[0.2em]">Contexto</h4><p className="leading-relaxed text-slate-600 dark:text-slate-300">{data.historicalContext}</p></div>
                   </div>
                   <DailyGuide plan={data.dailyPlan} />
                 </div>
               )}
-              {activeTab === 'quiz' && (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                  <Quiz 
-                    questions={data.quiz} 
-                    answers={quizAnswers}
-                    currentIdx={currentQuizIdx}
-                    setCurrentIdx={setCurrentQuizIdx}
-                    onAnswerChange={(idx, val) => setQuizAnswers(prev => ({...prev, [idx]: val}))}
-                  />
-                </div>
-              )}
-              {activeTab === 'journal' && (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                  <Journal 
-                    prompts={data.reflectionPrompts} 
-                    devotionalData={data} 
-                    quizAnswers={quizAnswers}
-                    journalAnswers={journalAnswers}
-                    onJournalChange={(idx, val) => setJournalAnswers(prev => ({...prev, [idx]: val}))}
-                  />
-                </div>
-              )}
+              {activeTab === 'quiz' && <Quiz questions={data.quiz} answers={quizAnswers} currentIdx={currentQuizIdx} setCurrentIdx={setCurrentQuizIdx} onAnswerChange={(idx, val) => setQuizAnswers(prev => ({...prev, [idx]: val}))} />}
+              {activeTab === 'journal' && <Journal prompts={data.reflectionPrompts} devotionalData={data} quizAnswers={quizAnswers} journalAnswers={journalAnswers} onJournalChange={(idx, val) => setJournalAnswers(prev => ({...prev, [idx]: val}))} />}
             </div>
           </div>
         )}
@@ -192,12 +287,16 @@ const App: React.FC = () => {
         {status === 'viewing_plan' && planData && (
           <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
             <ReadingPlanView plan={planData} onSelectPassage={(p) => { setInput(p); handleGenerate(p); }} />
-            <Button onClick={() => setStatus('idle')} variant="outline" className="mx-auto mt-8 px-10">Volver</Button>
+            <Button onClick={() => setStatus('idle')} variant="outline" className="mx-auto mt-8 px-10">Volver al Inicio</Button>
           </div>
         )}
 
         {status === 'store' && <Store stats={stats} onClose={() => setStatus('idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: prev.emeralds - 50, protectors: prev.protectors + 1})); }} />}
+        
+        {status === 'calendar' && <StreakCalendar stats={stats} onClose={() => setStatus('idle')} />}
+        {status === 'reminders' && <ReminderSettings stats={stats} onClose={() => setStatus('idle')} onSetReminder={(time) => setStats(prev => ({...prev, reminderTime: time}))} />}
       </main>
+
       <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-2 text-slate-400">
         <p className="text-sm font-bold tracking-widest uppercase">Vida en la Palabra © 2025</p>
       </footer>
