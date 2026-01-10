@@ -1,39 +1,62 @@
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-export const callGemma = async (prompt: string, system: string): Promise<string> => {
-  let source = "ninguna";
-  let rawKey: string | undefined = "";
-
-  // SOLO buscamos en las variables específicas de OpenRouter
-  if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== "undefined") {
-    rawKey = process.env.OPENROUTER_API_KEY;
-    source = "OPENROUTER_API_KEY (Mayúsculas)";
-  } else if (process.env.OpenRouter_API_KEY && process.env.OpenRouter_API_KEY !== "undefined") {
-    rawKey = process.env.OpenRouter_API_KEY;
-    source = "OpenRouter_API_KEY (CamelCase)";
+/**
+ * Intenta encontrar una clave válida de OpenRouter en el entorno.
+ * Busca claves que empiecen por 'sk-or-' en cualquier variable disponible.
+ */
+const findOpenRouterKey = (): { key: string, source: string } | null => {
+  // 1. Intentar por nombres específicos primero
+  const specificKeys = ['OPENROUTER_API_KEY', 'OpenRouter_API_KEY'];
+  for (const k of specificKeys) {
+    const val = process.env[k];
+    if (val && val !== "undefined" && val.trim().length > 0) {
+      return { key: val.trim(), source: k };
+    }
   }
 
-  const apiKey = rawKey?.trim() || "";
+  // 2. Escaneo profundo: Buscar cualquier variable que contenga una clave sk-or-
+  // Esto ayuda si el usuario puso la clave en API_KEY o en un nombre con espacios
+  try {
+    const allEnvKeys = Object.keys(process.env);
+    for (const k of allEnvKeys) {
+      const val = process.env[k];
+      if (typeof val === 'string' && val.trim().startsWith("sk-or-")) {
+        return { key: val.trim(), source: `${k} (Detectada por contenido)` };
+      }
+    }
+  } catch (e) {
+    // Si Object.keys falla en este entorno, pasamos al siguiente paso
+  }
+
+  return null;
+};
+
+export const callGemma = async (prompt: string, system: string): Promise<string> => {
+  const detected = findOpenRouterKey();
   
-  // 1. Error si no hay ninguna clave específica de OpenRouter
-  if (!apiKey || apiKey === "") {
+  if (!detected) {
+    // Si no se encuentra, generamos un diagnóstico de qué variables SI ve el sistema
+    const visibleVariables = Object.keys(process.env)
+      .filter(k => k.toLowerCase().includes("api") || k.toLowerCase().includes("key"))
+      .join(", ") || "Ninguna variable con 'API' o 'KEY' visible";
+
     throw new Error(
-      `Configuración de Gemma Incorrecta:\n` +
-      `No se detectó una clave específica para OpenRouter.\n\n` +
-      `SISTEMA DETECTÓ:\n` +
-      `• OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'Presente' : 'Vacía'}\n` +
-      `• OpenRouter_API_KEY: ${process.env.OpenRouter_API_KEY ? 'Presente' : 'Vacía'}\n\n` +
-      `Por favor, asegúrate de que una de estas dos variables tenga tu clave que empieza por 'sk-or-...'`
+      `Error de Configuración Crítico:\n` +
+      `No se encontró ninguna clave válida para OpenRouter (debe empezar con 'sk-or-').\n\n` +
+      `SISTEMA VE ESTAS VARIABLES: [${visibleVariables}]\n\n` +
+      `POR FAVOR:\n` +
+      `1. Verifica que la clave en OPENROUTER_API_KEY sea la correcta.\n` +
+      `2. Asegúrate de que no haya espacios antes o después del nombre de la variable.`
     );
   }
 
-  // 2. Validación de seguridad: ¿Es una clave de Google (Gemini)?
-  if (apiKey.startsWith("AIza")) {
+  // Validación extra: Si detectamos una clave de Google donde debería haber una de OpenRouter
+  if (detected.key.startsWith("AIza")) {
     throw new Error(
-      `Error de Configuración Crítico:\n` +
-      `La clave encontrada en ${source} parece ser una clave de Google Gemini (empieza por 'AIza').\n\n` +
-      `Gemma requiere una clave de OpenRouter (empieza por 'sk-or-'). Por favor, actualiza tus variables de entorno.`
+      `Conflicto de Claves:\n` +
+      `La clave usada (${detected.source}) es de Google Gemini.\n` +
+      `Gemma en OpenRouter requiere una clave que empiece por 'sk-or-'.`
     );
   }
 
@@ -42,7 +65,7 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
       method: "POST",
       headers: { 
         "Content-Type": "application/json", 
-        "Authorization": `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${detected.key}`,
         "HTTP-Referer": window.location.origin,
         "X-Title": "Vida Palabra Devocional"
       },
@@ -57,28 +80,21 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
     });
     
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       if (response.status === 401) {
-        const maskedKey = apiKey.length > 8 
-          ? `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}` 
-          : "Clave muy corta";
-        
         throw new Error(
-          `Error de Autenticación OpenRouter (401):\n` +
-          `• Fuente: ${source}\n` +
-          `• Clave usada: ${maskedKey}\n` +
-          `• Longitud: ${apiKey.length}\n\n` +
-          `LA CLAVE NO ES VÁLIDA: Aunque es la variable correcta, OpenRouter la rechaza. Verifica que no haya espacios y que la clave esté activa en tu panel de OpenRouter.`
+          `Error 401 (No Autorizado):\n` +
+          `Fuente: ${detected.source}\n` +
+          `La clave fue enviada pero OpenRouter no la aceptó. Verifica que tu cuenta tenga créditos o que la clave no haya expirado.`
         );
       }
-      
-      const errorData = await response.json().catch(() => ({}));
       throw new Error(`Error de OpenRouter (${response.status}): ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
     return data.choices?.[0]?.message?.content || "";
   } catch (error: any) {
-    if (error.message.includes("401") || error.message.includes("Configuración")) throw error;
-    throw new Error(`Error de conexión con Gemma (vía ${source}): ${error.message}`);
+    if (error.message.includes("Configuración") || error.message.includes("401")) throw error;
+    throw new Error(`Error al conectar con Gemma (vía ${detected.source}): ${error.message}`);
   }
 };
