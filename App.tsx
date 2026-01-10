@@ -125,11 +125,16 @@ const App: React.FC = () => {
     }
   };
 
-  const isHome = status === 'idle' || status === 'loading' || status === 'error' || status === 'loading_plan';
+  const isModalOpen = ['store', 'calendar', 'reminders'].includes(status);
+  
+  // Determinamos qué vista principal mostrar detrás de los modales
+  const showContent = (status === 'content' || isModalOpen) && data !== null;
+  const showReadingPlan = (status === 'viewing_plan' || isModalOpen) && planData !== null && !showContent;
+  const showHome = !showContent && !showReadingPlan;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 font-sans">
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 transition-colors">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-[60] transition-colors">
         <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setStatus('idle'); setErrorMessage(''); setData(null); setPlanData(null); }}>
             <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg group-hover:scale-110 transition-transform">
@@ -151,8 +156,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-10">
-        {isHome && (
+      <main className="max-w-4xl mx-auto px-4 py-10 relative z-10">
+        {showHome && (
           <div className="space-y-12 animate-in fade-in duration-700 text-center">
             <div className="space-y-2">
               <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300">Estudio Bíblico IA</h2>
@@ -162,7 +167,6 @@ const App: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col group/card">
                 <div className="space-y-5 mb-6">
-                  {/* Selector de Modelos Restablecido */}
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Motor de Inteligencia</label>
                     <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
@@ -247,7 +251,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {status === 'content' && data && (
+        {showContent && data && (
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="text-center">
                <div className="flex justify-center gap-2 mb-3">
@@ -284,20 +288,20 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {status === 'viewing_plan' && planData && (
+        {showReadingPlan && planData && (
           <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
             <ReadingPlanView plan={planData} onSelectPassage={(p) => { setInput(p); handleGenerate(p); }} />
             <Button onClick={() => setStatus('idle')} variant="outline" className="mx-auto mt-8 px-10">Volver al Inicio</Button>
           </div>
         )}
-
-        {status === 'store' && <Store stats={stats} onClose={() => setStatus('idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: prev.emeralds - 50, protectors: prev.protectors + 1})); }} />}
-        
-        {status === 'calendar' && <StreakCalendar stats={stats} onClose={() => setStatus('idle')} />}
-        {status === 'reminders' && <ReminderSettings stats={stats} onClose={() => setStatus('idle')} onSetReminder={(time) => setStats(prev => ({...prev, reminderTime: time}))} />}
       </main>
 
-      <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-2 text-slate-400">
+      {/* Modales - Se renderizan al final para estar sobre todo */}
+      {status === 'store' && <Store stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: prev.emeralds - 50, protectors: prev.protectors + 1})); }} />}
+      {status === 'calendar' && <StreakCalendar stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} />}
+      {status === 'reminders' && <ReminderSettings stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onSetReminder={(time) => setStats(prev => ({...prev, reminderTime: time}))} />}
+
+      <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-2 text-slate-400 relative z-10">
         <p className="text-sm font-bold tracking-widest uppercase">Vida en la Palabra © 2025</p>
       </footer>
     </div>
