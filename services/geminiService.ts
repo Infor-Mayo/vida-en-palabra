@@ -3,8 +3,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { DevotionalData, ReadingPlan, PlanDuration, AIProvider } from "../types";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-// Nueva clave de API proporcionada por el usuario
-const FALLBACK_OR_KEY = "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";
 
 const SYSTEM_INSTRUCTION = (numQuestions: number) => `Eres un asistente de estudios bíblicos académico y pedagógico. 
 Tu tarea es convertir una referencia bíblica en un material de estudio interactivo en español.
@@ -88,67 +86,60 @@ const cleanJsonResponse = (rawText: string): any => {
     try {
       return JSON.parse(sanitized);
     } catch (innerError) {
-      console.error("Error final de parseo:", sanitized);
-      throw new Error("La respuesta de la IA tiene un error de formato interno.");
+      throw new Error("Error crítico: La IA generó un JSON mal formado.");
     }
   }
 };
 
 const fetchFromOpenRouter = async (messages: any[]): Promise<any> => {
-  const rawKey = process.env.OpenRouter_API_KEY || FALLBACK_OR_KEY;
-  const apiKey = rawKey.trim();
+  const apiKey = (process.env.OpenRouter_API_KEY || "").trim();
   
+  if (!apiKey) {
+    throw new Error("La variable 'OpenRouter_API_KEY' no está configurada en el archivo .env.");
+  }
+
   try {
     const response = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
-        "HTTP-Referer": window.location.origin || "https://vidapalabra.app",
-        "X-Title": "Vida en la Palabra Devocional",
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "Vida Palabra Devocional",
       },
       body: JSON.stringify({
         model: "google/gemma-3-27b-it:free",
         messages: messages,
         temperature: 0.4,
-        max_tokens: 4000
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const msg = errorData.error?.message || `Error ${response.status}`;
-      
-      if (msg.toLowerCase().includes("user not found") || msg.toLowerCase().includes("invalid api key")) {
-        throw new Error("Error de autenticación con la clave de OpenRouter. Por favor, verifica que la clave sea correcta o usa Gemini.");
-      }
+    const data = await response.json();
 
-      if (msg.toLowerCase().includes("provider returned error")) {
-        throw new Error("El motor Gemma está temporalmente saturado. Prueba con Gemini en el menú superior.");
+    if (!response.ok) {
+      const msg = data.error?.message || `Error ${response.status}`;
+      if (response.status === 401 || msg.toLowerCase().includes("key")) {
+        throw new Error("Error de autenticación: Tu clave de OpenRouter es inválida. Revisa el archivo .env.");
       }
       throw new Error(msg);
     }
 
-    const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("No se recibió respuesta de OpenRouter.");
     
-    if (!content) throw new Error("La IA de OpenRouter no devolvió contenido.");
     return cleanJsonResponse(content);
   } catch (error: any) {
-    if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Error de red: No se pudo conectar con OpenRouter.");
-    }
-    throw new Error(error.message);
+    throw new Error(error.message || "Error de red con OpenRouter.");
   }
 };
 
 export const generateDevotional = async (passage: string, provider: AIProvider, numQuestions: number = 10): Promise<DevotionalData> => {
   if (provider === 'gemini') {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: `Realiza un estudio devocional completo y profundo del pasaje: "${passage}"` }] }],
+        contents: [{ parts: [{ text: `Estudio profundo de: "${passage}"` }] }],
         config: {
           systemInstruction: SYSTEM_INSTRUCTION(numQuestions),
           responseMimeType: "application/json",
@@ -156,26 +147,26 @@ export const generateDevotional = async (passage: string, provider: AIProvider, 
         }
       });
       
-      if (!response.text) throw new Error("Gemini no pudo generar el estudio.");
+      if (!response.text) throw new Error("Gemini no devolvió contenido.");
       return cleanJsonResponse(response.text);
     } catch (error: any) {
-      throw new Error(`Error en Gemini: ${error.message}`);
+      throw new Error(`Error Gemini: ${error.message}`);
     }
   } else {
     const messages = [
       { role: "system", content: SYSTEM_INSTRUCTION(numQuestions) },
-      { role: "user", content: `Analiza este pasaje bíblico y genera el estudio en formato JSON: "${passage}"` }
+      { role: "user", content: `Analiza el pasaje: "${passage}"` }
     ];
     return await fetchFromOpenRouter(messages);
   }
 };
 
 export const generateReadingPlan = async (topic: string, duration: PlanDuration, provider: AIProvider): Promise<ReadingPlan> => {
-  const prompt = `Crea un itinerario de lectura bíblica para el tema "${topic}" con una duración de "${duration}". Responde estrictamente en formato JSON con title, description, duration e items.`;
+  const prompt = `Crea un plan de lectura para: "${topic}" (${duration}). Responde estrictamente en JSON.`;
   
   if (provider === 'gemini') {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [{ parts: [{ text: prompt }] }],
@@ -206,11 +197,11 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration,
       });
       return cleanJsonResponse(response.text || "{}");
     } catch (error: any) {
-      throw new Error(`Error en el plan con Gemini: ${error.message}`);
+      throw new Error(`Error Gemini Plan: ${error.message}`);
     }
   } else {
     const messages = [
-      { role: "system", content: "Eres un experto en teología y diseño de planes de lectura bíblica. Responde siempre en JSON." },
+      { role: "system", content: "Experto en teología. Responde solo en JSON." },
       { role: "user", content: prompt }
     ];
     return await fetchFromOpenRouter(messages);
