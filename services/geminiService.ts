@@ -3,6 +3,7 @@ import { Type } from "@google/genai";
 import { DevotionalData, ReadingPlan, PlanDuration, AIProvider, QuizDifficulty } from "../types";
 import { callGemini } from "./geminiProvider";
 import { callGemma } from "./gemmaProvider";
+import { cleanJsonResponse, handleServiceError } from "./errorHandler";
 
 // --- ESQUEMA DE RESPUESTA INTEGRADO ---
 const FULL_DEVOTIONAL_SCHEMA = {
@@ -67,24 +68,7 @@ INSTRUCCIONES:
 1. NARRATIVA: Título, texto del pasaje, resumen teológico y contexto.
 2. RETOS: Genera exactamente ${num} retos variados de nivel ${diff.toUpperCase()}.
 3. APLICACIÓN: Reflexión práctica, 3 preguntas de diario y plan de 5 días.
-RESPONDE EXCLUSIVAMENTE CON JSON PURO.`;
-
-const cleanJsonResponse = (rawText: string): any => {
-  try {
-    let cleaned = rawText.trim();
-    if (cleaned.includes('```')) {
-      cleaned = cleaned.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
-    }
-    const startIdx = cleaned.indexOf('{');
-    const endIdx = cleaned.lastIndexOf('}');
-    if (startIdx !== -1 && endIdx !== -1) {
-      cleaned = cleaned.substring(startIdx, endIdx + 1);
-    }
-    return JSON.parse(cleaned);
-  } catch (e: any) {
-    throw new Error("Error en la respuesta de la IA. Por favor intenta de nuevo con un pasaje más breve.");
-  }
-};
+RESPONDE EXCLUSIVAMENTE CON JSON PURO. NO añadas introducciones ni explicaciones fuera del JSON.`;
 
 export const generateDevotional = async (
   passage: string, 
@@ -104,14 +88,7 @@ export const generateDevotional = async (
     }
     return cleanJsonResponse(responseText);
   } catch (error: any) {
-    if (error.message?.includes("429") || error.message?.includes("quota")) {
-      throw new Error("Límite de Gemini alcanzado. Cambia a Gemma 3 arriba.");
-    }
-    // Si el error no es el personalizado de 429/quota, lanzamos el mensaje solicitado
-    if (error.message && error.message.includes("Error en la respuesta de la IA")) {
-      throw error;
-    }
-    throw new Error("Error en la respuesta de la IA. Por favor intenta de nuevo con un pasaje más breve.");
+    handleServiceError(error, "generación del devocional");
   }
 };
 
@@ -128,9 +105,6 @@ export const generateReadingPlan = async (topic: string, duration: PlanDuration,
     }
     return cleanJsonResponse(responseText);
   } catch (error: any) {
-    if (error.message && error.message.includes("Error en la respuesta de la IA")) {
-      throw error;
-    }
-    throw new Error("Error en la respuesta de la IA. Por favor intenta de nuevo con un pasaje más breve.");
+    handleServiceError(error, "creación del plan de lectura");
   }
 };
