@@ -68,6 +68,11 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
     setIsAnswered(true);
   };
 
+  const handleSkip = () => {
+    if (onAnswerChange) onAnswerChange(currentIdx, "(Saltado)");
+    handleNext();
+  };
+
   const moveItem = (from: number, to: number) => {
     const newOrder = [...orderState];
     const [moved] = newOrder.splice(from, 1);
@@ -91,7 +96,7 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
       case 'matching':
         return Object.keys(matchingState.paired).length < (q.pairs?.length || 0);
       case 'ordering':
-        return false; // Siempre tiene un orden inicial
+        return false; 
       case 'fill-in-the-blanks':
         return blankStates.some(b => !b.trim());
       case 'open-ended':
@@ -120,7 +125,6 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
 
   return (
     <div className="bg-white dark:bg-slate-900 p-6 md:p-10 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 transition-all">
-      {/* Header del Cuestionario */}
       <div className="flex justify-between items-center mb-8">
         <div className="space-y-1">
           <span className="text-[10px] font-black bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 px-3 py-1 rounded-full uppercase tracking-tighter">
@@ -137,10 +141,7 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
 
       <h3 className="text-2xl font-serif text-slate-800 dark:text-slate-100 mb-10 leading-snug transition-colors">{q.question}</h3>
 
-      {/* RENDERIZADO SEGÚN TIPO */}
       <div className="space-y-4 mb-10">
-        
-        {/* SELECCIÓN ÚNICA O MÚLTIPLE */}
         {(q.type === 'multiple-choice' || q.type === 'multiple-selection') && q.options?.map((opt, idx) => {
           const isSelected = selectedIndices.includes(idx);
           const isCorrect = q.type === 'multiple-choice' ? idx === q.correctIndex : q.correctIndices?.includes(idx);
@@ -169,7 +170,6 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
           );
         })}
 
-        {/* ORDENAMIENTO */}
         {q.type === 'ordering' && (
           <div className="space-y-2">
             {orderState.map((item, idx) => (
@@ -186,7 +186,6 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
           </div>
         )}
 
-        {/* EMPAREJAMIENTO */}
         {q.type === 'matching' && q.pairs && (
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-2">
@@ -230,7 +229,6 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
           </div>
         )}
 
-        {/* COMPLETAR ESPACIOS */}
         {q.type === 'fill-in-the-blanks' && (
           <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-3xl text-lg leading-loose transition-colors">
             {q.textWithBlanks?.split(/\[___\]/).map((part, i, arr) => (
@@ -255,21 +253,15 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
           </div>
         )}
 
-        {/* REFLEXIÓN ABIERTA */}
         {q.type === 'open-ended' && (
           <div className="space-y-2">
             <textarea 
               disabled={isAnswered}
               value={answers[currentIdx] || ""}
               onChange={(e) => onAnswerChange?.(currentIdx, e.target.value)}
-              className="w-full h-40 p-5 rounded-3xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-              placeholder="Tus pensamientos aquí..."
+              className="w-full h-40 p-5 rounded-3xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600"
+              placeholder="Escribe tu reflexión aquí..."
             />
-            {!isAnswered && !answers[currentIdx]?.trim() && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium italic animate-pulse">
-                * Se requiere una reflexión escrita para continuar.
-              </p>
-            )}
           </div>
         )}
       </div>
@@ -283,19 +275,30 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onAnswerChange, answers =
         </div>
       )}
 
-      {!isAnswered ? (
-        <Button 
-          className="w-full h-16 rounded-[1.5rem]" 
-          onClick={handleConfirm}
-          disabled={isConfirmDisabled()}
-        >
-          Confirmar Respuesta
-        </Button>
-      ) : (
-        <Button className="w-full h-16 rounded-[1.5rem]" variant="secondary" onClick={handleNext}>
-          {currentIdx + 1 < questions.length ? "Siguiente Desafío" : "Ver Resultados"}
-        </Button>
-      )}
+      <div className="flex flex-col sm:flex-row gap-4">
+        {!isAnswered ? (
+          <>
+            <Button 
+              className="flex-grow h-16 rounded-[1.5rem]" 
+              onClick={handleConfirm}
+              disabled={isConfirmDisabled()}
+            >
+              Confirmar Respuesta
+            </Button>
+            <Button 
+              className="h-16 rounded-[1.5rem] px-8" 
+              variant="outline"
+              onClick={handleSkip}
+            >
+              Saltar Reto
+            </Button>
+          </>
+        ) : (
+          <Button className="w-full h-16 rounded-[1.5rem]" variant="secondary" onClick={handleNext}>
+            {currentIdx + 1 < questions.length ? "Siguiente Desafío" : "Ver Resultados"}
+          </Button>
+        )}
+      </div>
     </div>
   );
 };

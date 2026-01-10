@@ -26,6 +26,10 @@ const App: React.FC = () => {
   const [planDuration, setPlanDuration] = useState<PlanDuration>('weekly');
   const [numQuestions] = useState(10);
   
+  // Estados para persistencia de respuestas
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
+  const [journalAnswers, setJournalAnswers] = useState<Record<number, string>>({});
+  
   const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemini');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
   
@@ -59,6 +63,9 @@ const App: React.FC = () => {
 
     setErrorMessage('');
     setStatus('loading');
+    setQuizAnswers({});
+    setJournalAnswers({});
+    
     try {
       const result = await generateDevotional(targetPassage, aiProvider, numQuestions);
       setData(result);
@@ -259,8 +266,26 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {activeTab === 'quiz' && <div className="animate-in fade-in slide-in-from-right-4 duration-500"><Quiz questions={data.quiz} /></div>}
-              {activeTab === 'journal' && <div className="animate-in fade-in slide-in-from-right-4 duration-500"><Journal prompts={data.reflectionPrompts} devotionalData={data} /></div>}
+              {activeTab === 'quiz' && (
+                <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+                  <Quiz 
+                    questions={data.quiz} 
+                    answers={quizAnswers}
+                    onAnswerChange={(idx, val) => setQuizAnswers(prev => ({...prev, [idx]: val}))}
+                  />
+                </div>
+              )}
+              {activeTab === 'journal' && (
+                <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+                  <Journal 
+                    prompts={data.reflectionPrompts} 
+                    devotionalData={data} 
+                    quizAnswers={quizAnswers}
+                    journalAnswers={journalAnswers}
+                    onJournalChange={(idx, val) => setJournalAnswers(prev => ({...prev, [idx]: val}))}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
