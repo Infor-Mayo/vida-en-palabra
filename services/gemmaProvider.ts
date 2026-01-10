@@ -25,8 +25,8 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
           { "role": "system", "content": system },
           { "role": "user", "content": prompt }
         ],
-        "temperature": 0.2,
-        "max_tokens": 3000
+        "temperature": 0.3,
+        "max_tokens": 4000
       }),
     });
     
@@ -36,7 +36,13 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || "";
+    const content = data.choices?.[0]?.message?.content || "";
+    
+    if (!content || content.trim().length < 10) {
+      throw new Error("El modelo Gemma devolvió una respuesta vacía o demasiado corta. Por favor, intenta de nuevo o usa el motor Flash.");
+    }
+
+    return content;
   } catch (error: any) {
     throw new Error(`Fallo al conectar con Gemma: ${error.message}`);
   }

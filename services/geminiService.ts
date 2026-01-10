@@ -62,12 +62,31 @@ const FULL_DEVOTIONAL_SCHEMA = {
   ]
 };
 
-const getSystemPrompt = (num: number, diff: QuizDifficulty) => `Eres un erudito bíblico de alto nivel. Genera un devocional interactivo completo en JSON.
+const getSystemPrompt = (num: number, diff: QuizDifficulty, isGemma: boolean = false) => {
+  const base = `Eres un erudito bíblico de alto nivel. Genera un devocional interactivo completo en JSON.
 INSTRUCCIONES:
 1. NARRATIVA: Título creativo, texto del pasaje, resumen teológico profundo y contexto histórico.
 2. RETOS: Genera exactamente ${num} retos variados (opción múltiple, completar, emparejar) de dificultad ${diff.toUpperCase()}.
 3. APLICACIÓN: Reflexión práctica transformadora, 3 preguntas de diario y plan de 5 días.
 RESPONDE EXCLUSIVAMENTE CON JSON PURO. No añadas texto fuera del JSON.`;
+
+  if (isGemma) {
+    return `${base}
+ESTRUCTURA OBLIGATORIA:
+{
+  "title": "string",
+  "passageText": "string",
+  "summary": "string",
+  "historicalContext": "string",
+  "keyVerses": ["string"],
+  "quiz": [{"type": "multiple-choice|matching|fill-in-the-blanks", "question": "string", "explanation": "string", "options": ["string"], "correctIndex": 0}],
+  "reflectionPrompts": ["string"],
+  "practicalApplication": "string",
+  "dailyPlan": [{"day": 1, "focus": "string", "verse": "string", "action": "string"}]
+}`;
+  }
+  return base;
+};
 
 export const generateDevotional = async (
   passage: string, 
@@ -75,7 +94,8 @@ export const generateDevotional = async (
   numQuestions: number = 5, 
   difficulty: QuizDifficulty = 'medium'
 ): Promise<DevotionalData> => {
-  const systemPrompt = getSystemPrompt(numQuestions, difficulty);
+  const isGemma = modelType === 'gemma';
+  const systemPrompt = getSystemPrompt(numQuestions, difficulty, isGemma);
   const userPrompt = `Genera un devocional para: "${passage}"`;
 
   try {
@@ -95,7 +115,11 @@ export const generateDevotional = async (
 };
 
 export const generateReadingPlan = async (topic: string, duration: PlanDuration, modelType: ModelType): Promise<ReadingPlan> => {
-  const systemMsg = "Eres un planificador bíblico experto. Responde solo con JSON puro.";
+  const isGemma = modelType === 'gemma';
+  const systemMsg = isGemma 
+    ? "Eres un planificador bíblico experto. Responde solo con JSON puro siguiendo esta estructura: { \"title\": \"\", \"description\": \"\", \"duration\": \"\", \"items\": [ { \"id\": \"Etapa 1\", \"passage\": \"\", \"theme\": \"\", \"reason\": \"\" } ] }"
+    : "Eres un planificador bíblico experto. Responde solo con JSON puro.";
+    
   const prompt = `Crea un plan de lectura bíblica sobre "${topic}" para una duración "${duration}". Estructura JSON: title, description, duration, items (array con objetos {id, passage, theme, reason}).`;
   
   try {
