@@ -2,11 +2,16 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export const callGemma = async (prompt: string, system: string): Promise<string> => {
-  // Función interna para obtener la clave justo antes de la llamada (evita problemas de scope en build)
+  /**
+   * Obtiene la clave de OpenRouter exclusivamente desde las variables específicas.
+   * Se ha eliminado el acceso a API_KEY para evitar que el sistema intente usar
+   * una clave de Gemini con el endpoint de OpenRouter.
+   */
   const getGemmaKey = () => {
     const env = process.env as any;
-    // Intentamos primero con nombres específicos, luego con el genérico API_KEY
-    const key = env.OPENROUTER_API_KEY || env.OpenRouter_API_KEY ;
+    
+    // Buscamos estrictamente nombres asociados a OpenRouter
+    const key = env.OPENROUTER_API_KEY || env.OpenRouter_API_KEY;
     
     if (key && key !== "undefined" && key.trim().length > 0) {
       return key.trim();
@@ -18,14 +23,10 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
 
   if (!apiKey) {
     throw new Error(
-      "ERROR DE CONFIGURACIÓN: No se encontró una clave de API.\n" +
-      "Asegúrate de haber configurado la variable de entorno [API_KEY] en tu panel de control."
+      "ERROR DE CONFIGURACIÓN (Gemma): No se encontró una clave de OpenRouter.\n\n" +
+      "Por favor, asegúrate de configurar la variable de entorno [OPENROUTER_API_KEY] en tu panel de control.\n" +
+      "Nota: El modelo Gemma NO utilizará la variable genérica [API_KEY] por seguridad."
     );
-  }
-
-  // Si la clave es sospechosamente corta (L:14 como mencionaste), informamos al usuario
-  if (apiKey.length < 20) {
-    console.warn(`Advertencia: La clave detectada es muy corta (${apiKey.length} caracteres). Podría ser inválida.`);
   }
 
   try {
@@ -50,9 +51,9 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      // Si recibimos un 401, es que la clave que pasamos no era para OpenRouter
+      // Error de autenticación específico
       if (response.status === 401) {
-        throw new Error("Clave de API no autorizada. Asegúrate de que la variable [API_KEY] sea una clave válida de OpenRouter (sk-or-...).");
+        throw new Error("La clave configurada en [OPENROUTER_API_KEY] es inválida para OpenRouter.");
       }
       throw new Error(`OpenRouter (${response.status}): ${errorData.error?.message || response.statusText}`);
     }
@@ -60,6 +61,8 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
     const data = await response.json();
     return data.choices?.[0]?.message?.content || "";
   } catch (error: any) {
-    throw new Error(error.message.includes("ERROR DE") ? error.message : `Fallo al conectar con Gemma: ${error.message}`);
+    // Re-lanzar errores de configuración de forma limpia
+    if (error.message.includes("ERROR DE CONFIGURACIÓN")) throw error;
+    throw new Error(`Fallo al conectar con Gemma: ${error.message}`);
   }
 };
