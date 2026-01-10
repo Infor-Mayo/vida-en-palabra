@@ -4,22 +4,23 @@ import { DevotionalData, ReadingPlan, PlanDuration, AIProvider } from "../types"
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-const SYSTEM_INSTRUCTION = (numQuestions: number) => `Eres un asistente de estudios bíblicos académico y pedagógico. 
-Tu tarea es convertir una referencia bíblica en un material de estudio interactivo en español.
+const SYSTEM_INSTRUCTION = (numQuestions: number) => `Eres un asistente de estudios bíblicos académico. 
+Tarea: Generar un estudio interactivo en español para una referencia bíblica.
 
-PAUTAS CRÍTICAS:
-1. TRATAMIENTO DE TEMAS DIFÍCILES: Si el pasaje incluye sufrimiento o conflicto, trátalo desde la resiliencia y la sabiduría literaria.
-2. TEXTO COMPLETO: La propiedad 'passageText' DEBE tener los versículos completos del pasaje solicitado.
-3. CUESTIONARIO: Genera exactamente ${numQuestions} preguntas variadas (múltiple-choice, matching, ordering, fill-in-the-blanks).
-4. El resultado DEBE ser un JSON puro. No incluyas explicaciones fuera del JSON. 
-ESTRUCTURA OBLIGATORIA:
+REGLAS DE CONCISIÓN (CRÍTICO):
+1. 'passageText': Incluye solo los versículos del pasaje (máximo 1500 palabras). No incluyas toda la Biblia.
+2. 'summary' y 'historicalContext': Sé profundo pero directo (máximo 3 párrafos cada uno).
+3. 'quiz': Genera exactamente ${numQuestions} preguntas. Las explicaciones deben ser breves (máximo 2 frases).
+4. El resultado DEBE ser un JSON puro. No incluyas texto adicional antes o después.
+
+ESTRUCTURA:
 {
   "title": "string",
   "passageText": "string",
   "summary": "string",
   "historicalContext": "string",
   "keyVerses": ["string"],
-  "quiz": [{"type": "string", "question": "string", "explanation": "string", "options": ["string"], "correctIndex": 0}],
+  "quiz": [{"type": "multiple-choice|matching|ordering|fill-in-the-blanks", "question": "string", "explanation": "string", "options": ["string"], "correctIndex": 0}],
   "reflectionPrompts": ["string"],
   "practicalApplication": "string",
   "dailyPlan": [{"day": 1, "focus": "string", "verse": "string", "action": "string"}]
@@ -73,27 +74,40 @@ const RESPONSE_SCHEMA = (numQuestions: number) => ({
 const cleanJsonResponse = (rawText: string): any => {
   try {
     let cleaned = rawText.trim();
+    // Limpiar posibles envoltorios de Markdown
     if (cleaned.includes('```')) {
       const match = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (match && match[1]) cleaned = match[1];
     }
+    
+    // Buscar el primer '{' y el último '}' para ignorar cualquier texto basura del modelo
     const startIdx = cleaned.indexOf('{');
     const endIdx = cleaned.lastIndexOf('}');
-    if (startIdx === -1 || endIdx === -1) throw new Error("JSON no encontrado");
-    return JSON.parse(cleaned.substring(startIdx, endIdx + 1));
-  } catch (e) {
-    throw new Error("La IA no devolvió un formato de datos válido. Intenta con otro pasaje.");
+    
+    if (startIdx === -1 || endIdx === -1) {
+        throw new Error("No se encontró un objeto JSON válido en la respuesta.");
+    }
+    
+    const jsonCandidate = cleaned.substring(startIdx, endIdx + 1);
+    return JSON.parse(jsonCandidate);
+  } catch (e: any) {
+    console.error("Error al parsear JSON:", rawText);
+    if (rawText.length > 50000) {
+        throw new Error("La respuesta de la IA fue demasiado larga y se cortó. Por favor, intenta con un pasaje más corto.");
+    }
+    throw new Error(`Error de formato en la respuesta: ${e.message}`);
   }
 };
 
 export const generateDevotional = async (passage: string, provider: AIProvider, numQuestions: number = 10): Promise<DevotionalData> => {
   if (provider === 'gemini') {
-    if (!process.env.API_KEY) throw new Error("La variable de entorno API_KEY no está configurada.");
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API_KEY no encontrada. Configúrala en Railway o en tu archivo .env.");
     
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ parts: [{ text: `Estudio profundo de: "${passage}"` }] }],
+      contents: [{ parts: [{ text: `Genera un estudio bíblico para: "${passage}". Sé conciso.` }] }],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION(numQuestions),
         responseMimeType: "application/json",
@@ -101,11 +115,11 @@ export const generateDevotional = async (passage: string, provider: AIProvider, 
       }
     });
     
-    if (!response.text) throw new Error("Gemini no pudo procesar la solicitud.");
-    return JSON.parse(response.text);
+    if (!response.text) throw new Error("Gemini no devolvió texto.");
+    return cleanJsonResponse(response.text);
   } else {
     const orKey = process.env.OPENROUTER_API_KEY;
-    if (!orKey) throw new Error("La variable OPENROUTER_API_KEY no está configurada.");
+    if (!orKey) throw new Error("OPENROUTER_API_KEY no encontrada.");
 
     const response = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -119,7 +133,7 @@ export const generateDevotional = async (passage: string, provider: AIProvider, 
           { role: "system", content: SYSTEM_INSTRUCTION(numQuestions) },
           { role: "user", content: `Analiza: "${passage}"` }
         ],
-        temperature: 0.3,
+        temperature: 0.1, // Temperatura baja para más estabilidad en JSON
       }),
     });
 
@@ -130,40 +144,20 @@ export const generateDevotional = async (passage: string, provider: AIProvider, 
 };
 
 export const generateReadingPlan = async (topic: string, duration: PlanDuration, provider: AIProvider): Promise<ReadingPlan> => {
-  const prompt = `Crea un plan de lectura bíblica temático sobre "${topic}" para una duración de "${duration}". Responde SOLO en JSON.`;
+  const prompt = `Crea un plan de lectura bíblica sobre "${topic}" para "${duration}". Devuelve SOLO JSON.`;
   
   if (provider === 'gemini') {
-    if (!process.env.API_KEY) throw new Error("API_KEY no configurada.");
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API_KEY no configurada.");
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: { 
         responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            description: { type: Type.STRING },
-            duration: { type: Type.STRING },
-            items: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  passage: { type: Type.STRING },
-                  theme: { type: Type.STRING },
-                  reason: { type: Type.STRING }
-                }
-              }
-            }
-          },
-          required: ["title", "description", "duration", "items"]
-        }
       }
     });
-    return JSON.parse(response.text || "{}");
+    return cleanJsonResponse(response.text || "{}");
   } else {
     const orKey = process.env.OPENROUTER_API_KEY;
     if (!orKey) throw new Error("OPENROUTER_API_KEY no configurada.");
