@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { DevotionalData } from '../types';
 
 interface JournalProps {
@@ -44,7 +44,7 @@ export const Journal: React.FC<JournalProps> = ({
 
     content += "✨ VERSÍCULOS CLAVE\n";
     content += "------------------------------------------------------------\n";
-    devotionalData.keyVerses.forEach((v, i) => {
+    (devotionalData.keyVerses || []).forEach((v, i) => {
       content += `${i + 1}. ${v}\n`;
     });
     content += "\n";
@@ -55,7 +55,7 @@ export const Journal: React.FC<JournalProps> = ({
 
     content += "🧩 CUESTIONARIO Y RESPUESTAS\n";
     content += "------------------------------------------------------------\n";
-    devotionalData.quiz.forEach((q, i) => {
+    (devotionalData.quiz || []).forEach((q, i) => {
       content += `Pregunta ${i + 1}: ${q.question}\n`;
       content += `Tu Respuesta: ${quizAnswers[i] || "(Sin respuesta)"}\n`;
       content += `Explicación/Comentario: ${q.explanation}\n`;
@@ -74,7 +74,7 @@ export const Journal: React.FC<JournalProps> = ({
 
     content += "📅 PLAN SEMANAL SUGERIDO\n";
     content += "------------------------------------------------------------\n";
-    devotionalData.dailyPlan.forEach((d) => {
+    (devotionalData.dailyPlan || []).forEach((d) => {
       content += `Día ${d.day}: ${d.focus}\n`;
       content += `Lectura: ${d.verse}\n`;
       content += `Acción: ${d.action}\n`;

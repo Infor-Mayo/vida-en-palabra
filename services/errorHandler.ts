@@ -11,7 +11,6 @@ export const cleanJsonResponse = (rawText: string): any => {
     cleaned = cleaned.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     
     // 2. Localizar el objeto JSON real. 
-    // Si hay basura o repeticiones (como el bug de "Amén"), buscamos el último cierre de llave válido.
     const startIdx = cleaned.indexOf('{');
     const endIdx = cleaned.lastIndexOf('}');
     
@@ -28,18 +27,37 @@ export const cleanJsonResponse = (rawText: string): any => {
     const jsonCandidate = cleaned.substring(startIdx, endIdx + 1);
     
     // 3. Intento de parseo
-    return JSON.parse(jsonCandidate);
+    const parsed = JSON.parse(jsonCandidate);
+    
+    // 4. Saneamiento de emergencia: asegurar campos críticos
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      parsed.keyVerses = parsed.keyVerses || [];
+      parsed.quiz = parsed.quiz || [];
+      parsed.reflectionPrompts = parsed.reflectionPrompts || [];
+      parsed.dailyPlan = parsed.dailyPlan || [];
+      parsed.title = parsed.title || "Sin Título";
+      parsed.passageText = parsed.passageText || "";
+    }
+    
+    return parsed;
   } catch (e: any) {
-    // Si el parseo falla porque la IA metió texto basura dentro de un campo (como viste en tu error),
-    // intentamos una limpieza de emergencia de caracteres de control.
     try {
         let fallback = rawText.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
         const s = fallback.indexOf('{');
         const eIdx = fallback.lastIndexOf('}');
-        return JSON.parse(fallback.substring(s, eIdx + 1));
+        const parsed = JSON.parse(fallback.substring(s, eIdx + 1));
+        
+        // Saneamiento en fallback también
+        if (parsed && typeof parsed === 'object') {
+          parsed.keyVerses = parsed.keyVerses || [];
+          parsed.quiz = parsed.quiz || [];
+          parsed.reflectionPrompts = parsed.reflectionPrompts || [];
+          parsed.dailyPlan = parsed.dailyPlan || [];
+        }
+        return parsed;
     } catch (innerError) {
         console.error("Error fatal de JSON. Texto original:", rawText);
-        throw new Error(`El servidor de IA generó un texto corrupto o demasiado largo. Por favor, intenta de nuevo con un pasaje más corto.`);
+        throw new Error(`El servidor de IA generó un texto corrupto. Por favor, intenta de nuevo.`);
     }
   }
 };

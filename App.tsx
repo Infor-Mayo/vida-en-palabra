@@ -265,7 +265,7 @@ const App: React.FC = () => {
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
              <div className="text-center">
                <h2 className="text-5xl font-serif font-bold leading-tight">{data.title}</h2>
-               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-xs mt-3">{data.keyVerses[0] || input}</p>
+               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-xs mt-3">{data.keyVerses?.[0] || input}</p>
             </div>
             
             <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto shadow-inner sticky top-20 z-40">
@@ -298,6 +298,7 @@ const App: React.FC = () => {
                   <DailyGuide plan={data.dailyPlan} />
                 </div>
               )}
+              {/* Fixed: Changed currentQuizIdx prop to currentIdx to match QuizProps interface */}
               {activeTab === 'quiz' && <Quiz questions={data.quiz} answers={quizAnswers} currentIdx={currentQuizIdx} setCurrentIdx={setCurrentQuizIdx} onAnswerChange={(idx, val) => setQuizAnswers(prev => ({...prev, [idx]: val}))} />}
               {activeTab === 'journal' && <Journal prompts={data.reflectionPrompts} devotionalData={data} quizAnswers={quizAnswers} journalAnswers={journalAnswers} onJournalChange={(idx, val) => setJournalAnswers(prev => ({...prev, [idx]: val}))} />}
             </div>
