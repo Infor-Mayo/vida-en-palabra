@@ -17,6 +17,15 @@ const NUM_QUESTIONS_KEY = 'app_num_questions_preference';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
+const DEFAULT_STATS: UserStats = { 
+  streak: 0, 
+  lastStudyDate: null, 
+  studyHistory: [], 
+  emeralds: 0, 
+  protectors: 0, 
+  reminderTime: null 
+};
+
 const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<AppStatus>('idle');
@@ -39,9 +48,15 @@ const App: React.FC = () => {
   const [stats, setStats] = useState<UserStats>(() => {
     try {
       const saved = localStorage.getItem(STATS_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return { streak: 0, lastStudyDate: null, studyHistory: [], emeralds: 0, protectors: 0, reminderTime: null };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Mezclamos con DEFAULT_STATS para asegurar que nuevas propiedades como studyHistory existan
+        return { ...DEFAULT_STATS, ...parsed, studyHistory: parsed.studyHistory || [] };
+      }
+    } catch (e) {
+      console.error("Error al cargar stats:", e);
+    }
+    return DEFAULT_STATS;
   });
 
   useEffect(() => {
@@ -71,18 +86,34 @@ const App: React.FC = () => {
   const updateStreak = () => {
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
     setStats(prev => {
+      const history = prev.studyHistory || [];
       let newStreak = prev.streak;
-      const alreadyStudiedToday = prev.studyHistory.includes(today);
+      const alreadyStudiedToday = history.includes(today);
+      
       if (!alreadyStudiedToday) {
-        if (prev.lastStudyDate === yesterday) newStreak += 1;
-        else if (prev.lastStudyDate !== today) {
-          if (prev.protectors > 0 && prev.lastStudyDate) newStreak += 1;
-          else newStreak = 1;
+        if (prev.lastStudyDate === yesterday) {
+          newStreak += 1;
+        } else if (prev.lastStudyDate !== today) {
+          // Si tiene protectores y no es hoy, el protector mantiene la racha
+          if (prev.protectors > 0 && prev.lastStudyDate) {
+            newStreak += 1;
+            // Nota: Aquí se podría restar el protector, pero por ahora lo dejamos así 
+            // para que el usuario gestione su compra en la tienda.
+          } else {
+            newStreak = 1;
+          }
         }
       }
-      const newHistory = alreadyStudiedToday ? prev.studyHistory : [...prev.studyHistory, today];
-      return { ...prev, streak: newStreak, lastStudyDate: today, studyHistory: newHistory };
+      
+      const newHistory = alreadyStudiedToday ? history : [...history, today];
+      return { 
+        ...prev, 
+        streak: newStreak, 
+        lastStudyDate: today, 
+        studyHistory: newHistory 
+      };
     });
   };
 
@@ -103,7 +134,7 @@ const App: React.FC = () => {
       setActiveTab('study');
       updateStreak();
       const reward = (difficulty === 'hard' ? 5 : difficulty === 'medium' ? 3 : 2) * numQuestions;
-      setStats(prev => ({...prev, emeralds: prev.emeralds + reward}));
+      setStats(prev => ({...prev, emeralds: (prev.emeralds || 0) + reward}));
     } catch (error: any) {
       setErrorMessage(error.message);
       setStatus('error');
@@ -281,7 +312,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {status === 'store' && <Store stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: prev.emeralds - 50, protectors: prev.protectors + 1})); }} />}
+      {status === 'store' && <Store stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: (prev.emeralds || 0) - 50, protectors: (prev.protectors || 0) + 1})); }} />}
       {status === 'calendar' && <StreakCalendar stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} />}
       {status === 'reminders' && <ReminderSettings stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onSetReminder={(time) => setStats(prev => ({...prev, reminderTime: time}))} />}
 

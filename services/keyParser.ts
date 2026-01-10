@@ -8,29 +8,42 @@ export const getSecretKey = (prefix: 'goo' | 'op'): string | null => {
   
   if (!masterKey) return null;
 
-  // 1. Limpieza: Eliminar prefijo "API_KEY=" si el usuario lo pegó accidentalmente en el valor
-  if (masterKey.toUpperCase().startsWith('API_KEY=')) {
-    masterKey = masterKey.substring(8).trim();
+  // 1. Limpieza Ultra-Agresiva:
+  // Eliminamos cualquier rastro de "API_KEY=", comillas de escape de shell o espacios
+  // de forma iterativa por si vienen anidadas (ej: API_KEY="'value'")
+  let previousKey = "";
+  while (masterKey !== previousKey) {
+    previousKey = masterKey;
+    
+    // Quitar prefijo literal si existe
+    if (masterKey.toUpperCase().startsWith('API_KEY=')) {
+      masterKey = masterKey.substring(8).trim();
+    }
+    
+    // Quitar comillas al inicio y al final
+    masterKey = masterKey.replace(/^["']|["']$/g, '').trim();
   }
 
-  // 2. Eliminar comillas dobles o simples al inicio y final que pueden venir del entorno
-  masterKey = masterKey.replace(/^["']|["']$/g, '');
-
-  // 3. Regex robusta: busca el prefijo, corchete de apertura, 
-  // captura todo lo que NO sea un corchete de cierre ([^\]]+), y cierra.
-  // El flag 'i' permite que no importe si el prefijo es minúscula o mayúscula.
-  const regex = new RegExp(`${prefix}\\[([^\\]]+)\\]`, 'i');
-  const match = masterKey.match(regex);
+  // 2. Búsqueda Manual (Más fiable que Regex para llaves con caracteres especiales)
+  const marker = `${prefix}[`.toLowerCase();
+  const lowerKey = masterKey.toLowerCase();
+  const startIdx = lowerKey.indexOf(marker);
   
-  if (match && match[1]) {
-    const key = match[1].trim();
-    return key.length > 0 ? key : null;
+  if (startIdx !== -1) {
+    const contentStart = startIdx + marker.length;
+    // Buscamos el primer corchete de cierre DESPUÉS del marcador de apertura
+    const endIdx = masterKey.indexOf(']', contentStart);
+    
+    if (endIdx !== -1) {
+      const key = masterKey.substring(contentStart, endIdx).trim();
+      if (key.length > 0) return key;
+    }
   }
   
-  // 4. Fallback especial para Google Gemini
-  // Si buscamos 'goo' pero la llave no tiene el formato de corchetes, 
-  // asumimos que el usuario puso la llave de Google directamente sin el formato macabro.
-  if (prefix === 'goo' && !masterKey.toLowerCase().includes('goo[')) {
+  // 3. Fallback inteligente para Gemini
+  // Si buscas la llave de Google pero no hay formato de corchetes,
+  // asumimos que la variable completa es la llave de Google.
+  if (prefix === 'goo' && !lowerKey.includes('goo[')) {
     return masterKey;
   }
 
