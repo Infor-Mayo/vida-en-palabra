@@ -30,7 +30,7 @@ export interface DailyPlanDay {
 }
 
 export type PlanDuration = 'intensive' | 'weekly' | 'monthly' | 'annual';
-export type AIProvider = 'gemma' | 'gemini';
+export type ModelType = 'flash' | 'pro' | 'gemma';
 
 export interface ReadingPlanItem {
   id: string; 
@@ -61,7 +61,7 @@ export interface DevotionalData {
 export interface UserStats {
   streak: number;
   lastStudyDate: string | null;
-  studyHistory: string[]; // Fechas en formato YYYY-MM-DD
+  studyHistory: string[]; 
   emeralds: number;
   protectors: number;
   reminderTime: string | null;

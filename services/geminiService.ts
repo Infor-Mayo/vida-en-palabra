@@ -1,11 +1,10 @@
 
 import { Type } from "@google/genai";
-import { DevotionalData, ReadingPlan, PlanDuration, AIProvider, QuizDifficulty } from "../types";
+import { DevotionalData, ReadingPlan, PlanDuration, ModelType, QuizDifficulty } from "../types";
 import { callGemini } from "./geminiProvider";
 import { callGemma } from "./gemmaProvider";
 import { cleanJsonResponse, handleServiceError } from "./errorHandler";
 
-// --- ESQUEMA DE RESPUESTA INTEGRADO ---
 const FULL_DEVOTIONAL_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -63,17 +62,17 @@ const FULL_DEVOTIONAL_SCHEMA = {
   ]
 };
 
-const getSystemPrompt = (num: number, diff: QuizDifficulty) => `Eres un erudito bíblico. Genera un devocional interactivo completo en JSON.
+const getSystemPrompt = (num: number, diff: QuizDifficulty) => `Eres un erudito bíblico de alto nivel. Genera un devocional interactivo completo en JSON.
 INSTRUCCIONES:
-1. NARRATIVA: Título, texto del pasaje, resumen teológico y contexto.
-2. RETOS: Genera exactamente ${num} retos variados de nivel ${diff.toUpperCase()}.
-3. APLICACIÓN: Reflexión práctica, 3 preguntas de diario y plan de 5 días.
-RESPONDE EXCLUSIVAMENTE CON JSON PURO. NO añadas introducciones ni explicaciones fuera del JSON.`;
+1. NARRATIVA: Título creativo, texto del pasaje, resumen teológico profundo y contexto histórico.
+2. RETOS: Genera exactamente ${num} retos variados (opción múltiple, completar, emparejar) de dificultad ${diff.toUpperCase()}.
+3. APLICACIÓN: Reflexión práctica transformadora, 3 preguntas de diario y plan de 5 días.
+RESPONDE EXCLUSIVAMENTE CON JSON PURO. No añadas texto fuera del JSON.`;
 
 export const generateDevotional = async (
   passage: string, 
-  provider: AIProvider, 
-  numQuestions: number = 6, 
+  modelType: ModelType, 
+  numQuestions: number = 5, 
   difficulty: QuizDifficulty = 'medium'
 ): Promise<DevotionalData> => {
   const systemPrompt = getSystemPrompt(numQuestions, difficulty);
@@ -81,28 +80,34 @@ export const generateDevotional = async (
 
   try {
     let responseText: string;
-    if (provider === 'gemini') {
-      responseText = await callGemini(userPrompt, systemPrompt, FULL_DEVOTIONAL_SCHEMA);
-    } else {
+    
+    if (modelType === 'gemma') {
       responseText = await callGemma(userPrompt, systemPrompt);
+    } else {
+      const selectedModel = modelType === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+      responseText = await callGemini(userPrompt, systemPrompt, selectedModel, FULL_DEVOTIONAL_SCHEMA);
     }
+    
     return cleanJsonResponse(responseText);
   } catch (error: any) {
     handleServiceError(error, "generación del devocional");
   }
 };
 
-export const generateReadingPlan = async (topic: string, duration: PlanDuration, provider: AIProvider): Promise<ReadingPlan> => {
-  const systemMsg = "Eres un planificador bíblico. Responde solo con JSON puro.";
-  const prompt = `Plan de lectura sobre "${topic}" para "${duration}". JSON: title, description, duration, items (array {id, passage, theme, reason}).`;
+export const generateReadingPlan = async (topic: string, duration: PlanDuration, modelType: ModelType): Promise<ReadingPlan> => {
+  const systemMsg = "Eres un planificador bíblico experto. Responde solo con JSON puro.";
+  const prompt = `Crea un plan de lectura bíblica sobre "${topic}" para una duración "${duration}". Estructura JSON: title, description, duration, items (array con objetos {id, passage, theme, reason}).`;
   
   try {
     let responseText: string;
-    if (provider === 'gemini') {
-      responseText = await callGemini(prompt, systemMsg);
-    } else {
+    
+    if (modelType === 'gemma') {
       responseText = await callGemma(prompt, systemMsg);
+    } else {
+      const selectedModel = modelType === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+      responseText = await callGemini(prompt, systemMsg, selectedModel);
     }
+    
     return cleanJsonResponse(responseText);
   } catch (error: any) {
     handleServiceError(error, "creación del plan de lectura");
