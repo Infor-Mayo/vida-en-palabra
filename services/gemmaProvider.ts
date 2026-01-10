@@ -1,62 +1,48 @@
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-/**
- * Intenta encontrar una clave válida de OpenRouter en el entorno.
- * Busca claves que empiecen por 'sk-or-' en cualquier variable disponible.
- */
-const findOpenRouterKey = (): { key: string, source: string } | null => {
-  // 1. Intentar por nombres específicos primero
-  const specificKeys = ['OPENROUTER_API_KEY', 'OpenRouter_API_KEY'];
-  for (const k of specificKeys) {
-    const val = process.env[k];
-    if (val && val !== "undefined" && val.trim().length > 0) {
-      return { key: val.trim(), source: k };
-    }
-  }
-
-  // 2. Escaneo profundo: Buscar cualquier variable que contenga una clave sk-or-
-  // Esto ayuda si el usuario puso la clave en API_KEY o en un nombre con espacios
-  try {
-    const allEnvKeys = Object.keys(process.env);
-    for (const k of allEnvKeys) {
-      const val = process.env[k];
-      if (typeof val === 'string' && val.trim().startsWith("sk-or-")) {
-        return { key: val.trim(), source: `${k} (Detectada por contenido)` };
-      }
-    }
-  } catch (e) {
-    // Si Object.keys falla en este entorno, pasamos al siguiente paso
-  }
-
-  return null;
-};
-
 export const callGemma = async (prompt: string, system: string): Promise<string> => {
-  const detected = findOpenRouterKey();
-  
-  if (!detected) {
-    // Si no se encuentra, generamos un diagnóstico de qué variables SI ve el sistema
-    const visibleVariables = Object.keys(process.env)
-      .filter(k => k.toLowerCase().includes("api") || k.toLowerCase().includes("key"))
-      .join(", ") || "Ninguna variable con 'API' o 'KEY' visible";
+  // 1. Diagnóstico preventivo: Intentamos capturar los metadatos de las variables
+  const getMeta = (keyName: string) => {
+    const val = (process.env as any)[keyName];
+    return {
+      exists: !!val && val !== "undefined",
+      type: typeof val,
+      len: val ? String(val).length : 0,
+      prefix: val && String(val).startsWith("sk-or-") ? "Correcto (sk-or-)" : "Incorrecto o no empieza con sk-or-"
+    };
+  };
 
-    throw new Error(
-      `Error de Configuración Crítico:\n` +
-      `No se encontró ninguna clave válida para OpenRouter (debe empezar con 'sk-or-').\n\n` +
-      `SISTEMA VE ESTAS VARIABLES: [${visibleVariables}]\n\n` +
-      `POR FAVOR:\n` +
-      `1. Verifica que la clave en OPENROUTER_API_KEY sea la correcta.\n` +
-      `2. Asegúrate de que no haya espacios antes o después del nombre de la variable.`
-    );
+  const diag = {
+    OR_MAYA: getMeta("OPENROUTER_API_KEY"),
+    OR_CAMEL: getMeta("OpenRouter_API_KEY"),
+    API_GENERIC: getMeta("API_KEY")
+  };
+
+  // 2. Selección de la clave (Prioridad OpenRouter)
+  let apiKey = "";
+  let source = "";
+
+  if (diag.OR_MAYA.exists) {
+    apiKey = String((process.env as any)["OPENROUTER_API_KEY"]).trim();
+    source = "OPENROUTER_API_KEY";
+  } else if (diag.OR_CAMEL.exists) {
+    apiKey = String((process.env as any)["OpenRouter_API_KEY"]).trim();
+    source = "OpenRouter_API_KEY";
+  } else if (diag.API_GENERIC.exists && String((process.env as any)["API_KEY"]).startsWith("sk-or-")) {
+    apiKey = String((process.env as any)["API_KEY"]).trim();
+    source = "API_KEY (Detectada como OpenRouter)";
   }
 
-  // Validación extra: Si detectamos una clave de Google donde debería haber una de OpenRouter
-  if (detected.key.startsWith("AIza")) {
+  // 3. Si no hay clave válida, lanzamos el informe técnico detallado
+  if (!apiKey || apiKey === "") {
     throw new Error(
-      `Conflicto de Claves:\n` +
-      `La clave usada (${detected.source}) es de Google Gemini.\n` +
-      `Gemma en OpenRouter requiere una clave que empiece por 'sk-or-'.`
+      `SISTEMA NO DETECTA CLAVE DE OPENROUTER:\n\n` +
+      `INFORME TÉCNICO DE VARIABLES:\n` +
+      `• OPENROUTER_API_KEY: [Existe: ${diag.OR_MAYA.exists}, Tipo: ${diag.OR_MAYA.type}, Longitud: ${diag.OR_MAYA.len}]\n` +
+      `• OpenRouter_API_KEY: [Existe: ${diag.OR_CAMEL.exists}, Tipo: ${diag.OR_CAMEL.type}, Longitud: ${diag.OR_CAMEL.len}]\n` +
+      `• API_KEY (Genérica): [Existe: ${diag.API_GENERIC.exists}, Tipo: ${diag.API_GENERIC.type}, Longitud: ${diag.API_GENERIC.len}]\n\n` +
+      `Si los valores dicen 'false' o '0', el entorno no está pasando las variables al código.`
     );
   }
 
@@ -65,7 +51,7 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
       method: "POST",
       headers: { 
         "Content-Type": "application/json", 
-        "Authorization": `Bearer ${detected.key}`,
+        "Authorization": `Bearer ${apiKey}`,
         "HTTP-Referer": window.location.origin,
         "X-Title": "Vida Palabra Devocional"
       },
@@ -84,17 +70,17 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
       if (response.status === 401) {
         throw new Error(
           `Error 401 (No Autorizado):\n` +
-          `Fuente: ${detected.source}\n` +
-          `La clave fue enviada pero OpenRouter no la aceptó. Verifica que tu cuenta tenga créditos o que la clave no haya expirado.`
+          `Fuente: ${source} (Longitud: ${apiKey.length})\n` +
+          `La clave se envió pero OpenRouter la rechazó. Verifica que la clave sea de OpenRouter y no de Gemini.`
         );
       }
-      throw new Error(`Error de OpenRouter (${response.status}): ${errorData.error?.message || response.statusText}`);
+      throw new Error(`Error OpenRouter (${response.status}): ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
     return data.choices?.[0]?.message?.content || "";
   } catch (error: any) {
-    if (error.message.includes("Configuración") || error.message.includes("401")) throw error;
-    throw new Error(`Error al conectar con Gemma (vía ${detected.source}): ${error.message}`);
+    if (error.message.includes("SISTEMA NO DETECTA") || error.message.includes("401")) throw error;
+    throw new Error(`Fallo de conexión con Gemma (${source}): ${error.message}`);
   }
 };
