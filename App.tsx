@@ -26,9 +26,9 @@ const App: React.FC = () => {
   const [planDuration, setPlanDuration] = useState<PlanDuration>('weekly');
   const [numQuestions] = useState(10);
   
-  // Estados para persistencia de respuestas
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [journalAnswers, setJournalAnswers] = useState<Record<number, string>>({});
+  const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
   
   const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemini');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
@@ -65,23 +65,16 @@ const App: React.FC = () => {
     setStatus('loading');
     setQuizAnswers({});
     setJournalAnswers({});
+    setCurrentQuizIdx(0);
     
     try {
       const result = await generateDevotional(targetPassage, aiProvider, numQuestions);
       setData(result);
       setStatus('content');
       setActiveTab('study');
-      
       setStats(prev => ({...prev, emeralds: prev.emeralds + 10}));
     } catch (error: any) {
-      console.error("Error capturado:", error);
-      let friendlyMessage = error.message;
-      
-      if (friendlyMessage.includes("unterminated string") || friendlyMessage.includes("JSON")) {
-          friendlyMessage = "La respuesta de la IA fue demasiado extensa o malformada. Por favor, intenta de nuevo con una referencia más específica (ej. Juan 3:16-21 en lugar de todo un libro).";
-      }
-      
-      setErrorMessage(friendlyMessage);
+      setErrorMessage(error.message);
       setStatus('error');
     }
   };
@@ -98,21 +91,10 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-xl font-black hidden md:block tracking-tight text-slate-800 dark:text-slate-100">Vida Palabra</h1>
           </div>
-          
           <div className="flex items-center gap-4">
             <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex border border-slate-200 dark:border-slate-700">
-              <button 
-                onClick={() => { setAiProvider('gemma'); setErrorMessage(''); }} 
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Gemma
-              </button>
-              <button 
-                onClick={() => { setAiProvider('gemini'); setErrorMessage(''); }} 
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Gemini
-              </button>
+              <button onClick={() => setAiProvider('gemma')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500'}`}>Gemma</button>
+              <button onClick={() => setAiProvider('gemini')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500'}`}>Gemini</button>
             </div>
             <GamificationHeader stats={stats} onOpenStore={() => setStatus('store')} />
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all text-xl">
@@ -124,73 +106,24 @@ const App: React.FC = () => {
 
       <main className="max-w-4xl mx-auto px-4 py-10">
         {isHome && (
-          <div className="space-y-12 animate-in fade-in duration-700">
-            <div className="text-center space-y-4">
-              <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300 transition-colors">Tu Compañero Bíblico</h2>
-              <p className="text-lg text-slate-500 dark:text-slate-400 transition-colors max-w-2xl mx-auto">Profundiza en las Escrituras con el apoyo de Inteligencia Artificial.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col transition-all hover:border-indigo-200">
-                <h3 className="text-xl font-bold mb-4 text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                   <span>📖</span> Analizar Pasaje
-                </h3>
+          <div className="space-y-12 animate-in fade-in duration-700 text-center">
+            <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300">Tu Compañero Bíblico</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col">
+                <h3 className="text-xl font-bold mb-4">📖 Analizar Pasaje</h3>
                 <textarea 
                   value={input} 
-                  onChange={(e) => { setInput(e.target.value); setErrorMessage(''); }} 
-                  placeholder="Escribe un pasaje (ej: Juan 3:16, Salmo 23)..." 
-                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all text-slate-800 dark:text-slate-200 placeholder:text-slate-400" 
+                  onChange={(e) => setInput(e.target.value)} 
+                  placeholder="Juan 3:16, Salmo 23..." 
+                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px]" 
                 />
-                
-                {errorMessage && (
-                  <div className="mt-4 p-5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-2xl border border-red-100 dark:border-red-900/50 flex flex-col gap-3">
-                    <div className="flex gap-2 items-start">
-                      <span className="text-lg">⚠️</span>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-bold">Aviso:</span>
-                        <span className="break-words opacity-90">{errorMessage}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <Button 
-                  className="mt-6 w-full py-4 text-lg" 
-                  onClick={() => handleGenerate()} 
-                  disabled={!input.trim() || status === 'loading'}
-                  isLoading={status === 'loading'}
-                >
-                  Generar Estudio
-                </Button>
+                {errorMessage && <p className="mt-4 text-red-500 text-sm">{errorMessage}</p>}
+                <Button className="mt-6 w-full py-4" onClick={() => handleGenerate()} disabled={!input.trim() || status === 'loading'} isLoading={status === 'loading'}>Generar Estudio</Button>
               </div>
-
-              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col border border-white/5">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <span>📅</span> Plan de Lectura
-                </h3>
-                <input 
-                  type="text" 
-                  value={planTopic} 
-                  onChange={(e) => { setPlanTopic(e.target.value); setErrorMessage(''); }} 
-                  placeholder="Tema: Esperanza, Sabiduría, Perdón..." 
-                  className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none mb-4 focus:ring-2 focus:ring-teal-400 transition-all placeholder:text-white/30" 
-                />
-                <div className="flex gap-2 mb-6">
-                  {['weekly', 'monthly'].map(d => (
-                    <button 
-                      key={d} 
-                      onClick={() => setPlanDuration(d as any)}
-                      className={`flex-grow py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${planDuration === d ? 'bg-teal-400 border-teal-400 text-slate-900 shadow-lg' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
-                    >
-                      {d === 'weekly' ? '7 Días' : '30 Días'}
-                    </button>
-                  ))}
-                </div>
-                <Button 
-                  variant="secondary" 
-                  className="mt-auto bg-teal-400 text-slate-900 border-none hover:bg-teal-300 py-4 text-lg" 
-                  onClick={async () => {
-                    setErrorMessage('');
+              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col">
+                <h3 className="text-xl font-bold mb-4">📅 Plan de Lectura</h3>
+                <input type="text" value={planTopic} onChange={(e) => setPlanTopic(e.target.value)} placeholder="Tema..." className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white mb-4 outline-none focus:ring-2 focus:ring-teal-400" />
+                <Button variant="secondary" className="mt-auto bg-teal-400 text-slate-900 py-4" onClick={async () => {
                     setStatus('loading_plan');
                     try {
                       const p = await generateReadingPlan(planTopic, planDuration, aiProvider);
@@ -200,77 +133,43 @@ const App: React.FC = () => {
                       setErrorMessage(e.message);
                       setStatus('error');
                     }
-                  }} 
-                  disabled={!planTopic.trim() || status === 'loading_plan'}
-                  isLoading={status === 'loading_plan'}
-                >
-                  Diseñar Plan
-                </Button>
+                  }} disabled={!planTopic.trim() || status === 'loading_plan'} isLoading={status === 'loading_plan'}>Diseñar Plan</Button>
               </div>
             </div>
-            
-            {(status === 'loading' || status === 'loading_plan') && (
-              <div className="text-center space-y-4 animate-pulse pt-10">
-                <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-                <p className="text-indigo-600 dark:text-indigo-400 font-bold text-xl">Consultando las Escrituras...</p>
-                <p className="text-sm text-slate-500">Esto puede tomar unos segundos usando {aiProvider === 'gemini' ? 'Google Gemini' : 'OpenRouter Gemma'}.</p>
-              </div>
-            )}
           </div>
         )}
 
         {status === 'content' && data && (
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="text-center">
-               <h2 className="text-5xl font-serif font-bold text-slate-900 dark:text-slate-100 transition-colors leading-tight">{data.title}</h2>
+               <h2 className="text-5xl font-serif font-bold">{data.title}</h2>
                <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-sm mt-2">{input}</p>
             </div>
-
-            <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto shadow-inner">
+            <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto">
               {['study', 'quiz', 'journal'].map(tab => (
-                <button 
-                  key={tab} 
-                  onClick={() => setActiveTab(tab as any)}
-                  className={`flex-grow py-3 px-4 rounded-2xl text-[11px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-md' : 'text-slate-500'}`}
-                >
+                <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-grow py-3 px-4 rounded-2xl text-[11px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-md' : 'text-slate-500'}`}>
                   {tab === 'study' ? 'Estudio' : tab === 'quiz' ? 'Reto' : 'Diario'}
                 </button>
               ))}
             </div>
-
             <div className="min-h-[500px]">
               {activeTab === 'study' && (
                 <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
-                  <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border border-slate-100 dark:border-slate-800 italic font-serif text-2xl leading-relaxed text-center shadow-lg transition-all text-slate-800 dark:text-slate-100">
-                    "{data.passageText}"
-                  </div>
-                  
+                  <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] italic font-serif text-2xl text-center shadow-lg">"{data.passageText}"</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
-                      <h4 className="font-black text-[10px] text-indigo-500 uppercase mb-4 tracking-[0.2em]">Explicación Teológica</h4>
-                      <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300">{data.summary}</p>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
-                      <h4 className="font-black text-[10px] text-teal-500 uppercase mb-4 tracking-[0.2em]">Contexto Histórico</h4>
-                      <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300">{data.historicalContext}</p>
-                    </div>
+                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800"><h4 className="font-black text-[10px] text-indigo-50 uppercase mb-4 tracking-[0.2em]">Explicación</h4><p>{data.summary}</p></div>
+                    <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800"><h4 className="font-black text-[10px] text-teal-500 uppercase mb-4 tracking-[0.2em]">Contexto</h4><p>{data.historicalContext}</p></div>
                   </div>
-
-                  <div className="bg-indigo-600 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-8xl">🙏</div>
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 opacity-80">Aplicación Práctica</h4>
-                    <p className="text-2xl font-serif italic leading-relaxed relative z-10">"{data.practicalApplication}"</p>
-                  </div>
-                  
                   <DailyGuide plan={data.dailyPlan} />
                 </div>
               )}
-
               {activeTab === 'quiz' && (
                 <div className="animate-in fade-in slide-in-from-right-4 duration-500">
                   <Quiz 
                     questions={data.quiz} 
                     answers={quizAnswers}
+                    currentIdx={currentQuizIdx}
+                    setCurrentIdx={setCurrentQuizIdx}
                     onAnswerChange={(idx, val) => setQuizAnswers(prev => ({...prev, [idx]: val}))}
                   />
                 </div>
@@ -292,39 +191,15 @@ const App: React.FC = () => {
 
         {status === 'viewing_plan' && planData && (
           <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
-            <ReadingPlanView 
-              plan={planData} 
-              onSelectPassage={(p) => {
-                setInput(p);
-                handleGenerate(p);
-              }} 
-            />
-            <div className="mt-12 flex justify-center">
-              <Button onClick={() => setStatus('idle')} variant="outline" className="px-10 border-slate-300 text-slate-600">Volver al Inicio</Button>
-            </div>
+            <ReadingPlanView plan={planData} onSelectPassage={(p) => { setInput(p); handleGenerate(p); }} />
+            <Button onClick={() => setStatus('idle')} variant="outline" className="mx-auto mt-8 px-10">Volver</Button>
           </div>
         )}
 
-        {status === 'store' && (
-          <Store 
-            stats={stats} 
-            onClose={() => setStatus('idle')} 
-            onBuyProtector={() => {
-              if (stats.emeralds >= 50) {
-                setStats(prev => ({
-                  ...prev,
-                  emeralds: prev.emeralds - 50,
-                  protectors: prev.protectors + 1
-                }));
-              }
-            }} 
-          />
-        )}
+        {status === 'store' && <Store stats={stats} onClose={() => setStatus('idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: prev.emeralds - 50, protectors: prev.protectors + 1})); }} />}
       </main>
-      
       <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-2 text-slate-400">
         <p className="text-sm font-bold tracking-widest uppercase">Vida en la Palabra © 2025</p>
-        <p className="text-xs">Desarrollado con Gemini 3 Flash para un estudio bíblico gratuito y potente.</p>
       </footer>
     </div>
   );
