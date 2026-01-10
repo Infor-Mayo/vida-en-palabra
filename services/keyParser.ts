@@ -5,7 +5,7 @@
  */
 export const getSecretKey = (prefix: 'goo' | 'op'): string | null => {
   let masterKey = (process.env.API_KEY || '').trim();
-  console.log("ENV KEYS:", process.env.API_KEY);
+
   
   if (!masterKey) return null;
 
