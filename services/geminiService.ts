@@ -66,23 +66,31 @@ const getSystemPrompt = (num: number, diff: QuizDifficulty, isGemma: boolean = f
   const base = `Eres un erudito bíblico de alto nivel. Genera un devocional interactivo completo en JSON.
 INSTRUCCIONES:
 1. NARRATIVA: Título creativo, texto del pasaje, resumen teológico profundo y contexto histórico.
-2. RETOS: Genera exactamente ${num} retos variados (opción múltiple, completar, emparejar) de dificultad ${diff.toUpperCase()}.
+2. RETOS: Genera exactamente ${num} retos variados de dificultad ${diff.toUpperCase()}.
 3. APLICACIÓN: Reflexión práctica transformadora, 3 preguntas de diario y plan de 5 días.
-RESPONDE EXCLUSIVAMENTE CON JSON PURO. No añadas texto fuera del JSON.`;
+RESPONDE EXCLUSIVAMENTE CON JSON PURO.`;
 
   if (isGemma) {
     return `${base}
-ESTRUCTURA OBLIGATORIA:
+ESTRUCTURA DE RETOS (EJEMPLOS):
+- Si type="multiple-choice": usar "options": ["A", "B"] y "correctIndex": 0.
+- Si type="matching": usar "pairs": [{"left": "Termino", "right": "Definicion"}].
+- Si type="fill-in-the-blanks": usar "textWithBlanks": "El [blank] es amor" y "blankAnswers": ["Dios"].
+
+JSON COMPLETO DEBE SEGUIR ESTA LLAVE:
 {
-  "title": "string",
-  "passageText": "string",
-  "summary": "string",
-  "historicalContext": "string",
-  "keyVerses": ["string"],
-  "quiz": [{"type": "multiple-choice|matching|fill-in-the-blanks", "question": "string", "explanation": "string", "options": ["string"], "correctIndex": 0}],
-  "reflectionPrompts": ["string"],
-  "practicalApplication": "string",
-  "dailyPlan": [{"day": 1, "focus": "string", "verse": "string", "action": "string"}]
+  "title": "...",
+  "passageText": "...",
+  "summary": "...",
+  "historicalContext": "...",
+  "keyVerses": ["..."],
+  "quiz": [
+    {"type": "multiple-choice", "question": "...", "options": ["..."], "correctIndex": 0, "explanation": "..."},
+    {"type": "matching", "question": "...", "pairs": [{"left": "...", "right": "..."}], "explanation": "..."}
+  ],
+  "reflectionPrompts": ["..."],
+  "practicalApplication": "...",
+  "dailyPlan": [{"day": 1, "focus": "...", "verse": "...", "action": "..."}]
 }`;
   }
   return base;

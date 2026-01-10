@@ -39,20 +39,22 @@ export const Quiz: React.FC<QuizProps> = ({
 
   const q = questions[currentIdx];
 
-  // Regex para capturar [blank], [BLANK], ___ y variaciones
   const BLANK_REGEX = /\[\s*blank\s*\]|\[\s*_+\s*\]|(?<!\w)_+(?!\w)/gi;
 
   useEffect(() => {
     if (!q) return;
     setIsAnswered(false);
     setSelectedIndices([]);
+    setShuffledRights([]); // Resetear siempre al cambiar de pregunta
     
     if (q.type === 'ordering' && q.orderedItems) {
       setOrderState([...q.orderedItems].sort(() => Math.random() - 0.5));
-    } else if (q.type === 'matching' && q.pairs) {
+    } else if (q.type === 'matching') {
       setMatchingState({ left: null, paired: {} });
-      const rights = q.pairs.map(p => p.right);
-      setShuffledRights([...rights].sort(() => Math.random() - 0.5));
+      if (q.pairs && q.pairs.length > 0) {
+        const rights = q.pairs.map(p => p.right);
+        setShuffledRights([...rights].sort(() => Math.random() - 0.5));
+      }
     } else if (q.type === 'fill-in-the-blanks') {
       const content = q.textWithBlanks || q.question || "";
       const blanksInText = content.match(BLANK_REGEX)?.length || 0;
@@ -64,8 +66,21 @@ export const Quiz: React.FC<QuizProps> = ({
   if (!q) {
     return (
       <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 text-center">
-        <p className="text-slate-500">No hay retos disponibles para este estudio.</p>
+        <p className="text-slate-500">No hay retos disponibles.</p>
         <Button onClick={() => setShowResults(true)} className="mt-4">Ver Resumen</Button>
+      </div>
+    );
+  }
+
+  // Validación de datos corruptos de la IA
+  const isBrokenMatching = q.type === 'matching' && (!q.pairs || q.pairs.length === 0);
+  const isBrokenChoice = (q.type === 'multiple-choice' || q.type === 'multiple-selection') && (!q.options || q.options.length === 0);
+
+  if (isBrokenMatching || isBrokenChoice) {
+    return (
+      <div className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800 text-center">
+        <p className="text-slate-500 mb-6 font-medium italic">Este reto no pudo ser cargado correctamente por la IA.</p>
+        <Button onClick={() => currentIdx + 1 < questions.length ? setCurrentIdx(currentIdx + 1) : setShowResults(true)} variant="outline" className="mx-auto">Saltar Reto</Button>
       </div>
     );
   }
@@ -144,15 +159,6 @@ export const Quiz: React.FC<QuizProps> = ({
         <h3 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">¡Misión cumplida!</h3>
         <p className="text-5xl font-black text-indigo-600 dark:text-indigo-400 my-8">{score} / {questions.length}</p>
         <Button className="w-full h-14" onClick={() => { setCurrentIdx(0); setScore(0); setShowResults(false); }}>Reiniciar Retos</Button>
-      </div>
-    );
-  }
-
-  if ((q.type === 'multiple-choice' || q.type === 'multiple-selection') && (!q.options || q.options.length === 0)) {
-    return (
-      <div className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800 text-center">
-        <p className="text-slate-500 mb-6 font-medium">Este reto no cargó correctamente (Faltan opciones).</p>
-        <Button onClick={handleNext} variant="outline" className="mx-auto">Saltar Reto</Button>
       </div>
     );
   }

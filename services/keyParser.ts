@@ -5,7 +5,9 @@
  */
 export const getSecretKey = (prefix: 'goo' | 'op'): string | null => {
   let masterKey = (process.env.API_KEY || '').trim();
-
+  if(process.env.OpenRouter_API_KEY){
+  console.log("or KEYS:", process.env.OpenRouter_API_KEY);
+  }
   
   if (!masterKey) return null;
 
