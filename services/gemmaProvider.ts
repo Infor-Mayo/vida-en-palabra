@@ -20,6 +20,9 @@ export const callGemma = async (prompt: string, system: string): Promise<string>
   };
 
   const apiKey = getGemmaKey();
+  console.log("ENV KEYS:", Object.keys(process.env));
+  console.log("OPENROUTER:", process.env.OPENROUTER_API_KEY);
+
 
   if (!apiKey) {
     throw new Error(
