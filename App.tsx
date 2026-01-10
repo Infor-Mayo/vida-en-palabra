@@ -24,7 +24,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'study' | 'quiz' | 'journal'>('study');
   const [planTopic, setPlanTopic] = useState('');
   const [planDuration, setPlanDuration] = useState<PlanDuration>('weekly');
-  const [numQuestions, setNumQuestions] = useState(10);
+  const [numQuestions] = useState(10);
   
   const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem(PROVIDER_KEY) as AIProvider) || 'gemini');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) as ThemeMode) || 'system');
@@ -49,6 +49,10 @@ const App: React.FC = () => {
     return { streak: 0, lastStudyDate: null, emeralds: 0, protectors: 0 };
   });
 
+  useEffect(() => {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  }, [stats]);
+
   const handleGenerate = async (passageStr?: string) => {
     const targetPassage = passageStr || input;
     if (!targetPassage.trim()) return;
@@ -61,10 +65,11 @@ const App: React.FC = () => {
       setStatus('content');
       setActiveTab('study');
       
+      // Bonus por completar el estudio
       setStats(prev => ({...prev, emeralds: prev.emeralds + 10}));
     } catch (error: any) {
-      console.error("Error capturado:", error);
-      setErrorMessage(error.message || "Error inesperado al conectar con el servidor.");
+      console.error("Error de la aplicación:", error);
+      setErrorMessage(error.message || "No se pudo conectar con el servicio de IA. Verifica tu conexión o las claves de API.");
       setStatus('error');
     }
   };
@@ -76,7 +81,7 @@ const App: React.FC = () => {
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 transition-colors">
         <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setStatus('idle'); setErrorMessage(''); setData(null); setPlanData(null); }}>
-            <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg group-hover:scale-105 transition-transform">
+            <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg group-hover:scale-110 transition-transform">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
             </div>
             <h1 className="text-xl font-black hidden md:block tracking-tight text-slate-800 dark:text-slate-100">Vida Palabra</h1>
@@ -88,13 +93,13 @@ const App: React.FC = () => {
                 onClick={() => { setAiProvider('gemma'); setErrorMessage(''); }} 
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemma' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                Gemma (Free)
+                Gemma
               </button>
               <button 
                 onClick={() => { setAiProvider('gemini'); setErrorMessage(''); }} 
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${aiProvider === 'gemini' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                Gemini (Free)
+                Gemini
               </button>
             </div>
             <GamificationHeader stats={stats} onOpenStore={() => setStatus('store')} />
@@ -109,18 +114,20 @@ const App: React.FC = () => {
         {isHome && (
           <div className="space-y-12 animate-in fade-in duration-700">
             <div className="text-center space-y-4">
-              <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300 transition-colors">Estudio Bíblico Gratis</h2>
-              <p className="text-lg text-slate-500 dark:text-slate-400 transition-colors max-w-2xl mx-auto">Usando Gemini y Gemma para profundizar en tu fe.</p>
+              <h2 className="text-5xl md:text-6xl font-serif font-bold text-indigo-950 dark:text-indigo-300 transition-colors">Tu Compañero Bíblico</h2>
+              <p className="text-lg text-slate-500 dark:text-slate-400 transition-colors max-w-2xl mx-auto">Profundiza en las Escrituras con el apoyo de Inteligencia Artificial.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col transition-all hover:border-indigo-200">
-                <h3 className="text-xl font-bold mb-4 text-slate-800 dark:text-slate-100">Analizar Pasaje</h3>
+                <h3 className="text-xl font-bold mb-4 text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                   <span>📖</span> Analizar Pasaje
+                </h3>
                 <textarea 
                   value={input} 
                   onChange={(e) => { setInput(e.target.value); setErrorMessage(''); }} 
-                  placeholder="Ej: Romanos 12:1-2, Salmo 91..." 
-                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all text-slate-800 dark:text-slate-200" 
+                  placeholder="Escribe un pasaje (ej: Juan 3:16, Salmo 23)..." 
+                  className="w-full flex-grow p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all text-slate-800 dark:text-slate-200 placeholder:text-slate-400" 
                 />
                 
                 {errorMessage && (
@@ -129,18 +136,6 @@ const App: React.FC = () => {
                       <span className="text-lg">⚠️</span>
                       <span className="break-words">{errorMessage}</span>
                     </div>
-                    {errorMessage.toLowerCase().includes("autenticación") || errorMessage.toLowerCase().includes("user not found") ? (
-                      <Button 
-                        variant="outline" 
-                        className="py-1 px-4 text-xs w-fit bg-white dark:bg-slate-800" 
-                        onClick={() => {
-                          setAiProvider('gemini');
-                          setErrorMessage('');
-                        }}
-                      >
-                        Cambiar a Gemini (Recomendado)
-                      </Button>
-                    ) : null}
                   </div>
                 )}
 
@@ -150,17 +145,19 @@ const App: React.FC = () => {
                   disabled={!input.trim() || status === 'loading'}
                   isLoading={status === 'loading'}
                 >
-                  Generar Devocional
+                  Generar Estudio
                 </Button>
               </div>
 
               <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col border border-white/5">
-                <h3 className="text-xl font-bold mb-4">Plan de Lectura</h3>
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <span>📅</span> Plan de Lectura
+                </h3>
                 <input 
                   type="text" 
                   value={planTopic} 
                   onChange={(e) => { setPlanTopic(e.target.value); setErrorMessage(''); }} 
-                  placeholder="Tema: Paz, Matrimonio, Liderazgo..." 
+                  placeholder="Tema: Esperanza, Sabiduría, Perdón..." 
                   className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none mb-4 focus:ring-2 focus:ring-teal-400 transition-all placeholder:text-white/30" 
                 />
                 <div className="flex gap-2 mb-6">
@@ -192,15 +189,16 @@ const App: React.FC = () => {
                   disabled={!planTopic.trim() || status === 'loading_plan'}
                   isLoading={status === 'loading_plan'}
                 >
-                  Diseñar Itinerario
+                  Diseñar Plan
                 </Button>
               </div>
             </div>
             
             {(status === 'loading' || status === 'loading_plan') && (
-              <div className="text-center space-y-4 animate-pulse">
-                <p className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">Inspirando tu estudio...</p>
-                <p className="text-sm text-slate-500">Estamos conectando con {aiProvider === 'gemini' ? 'Google Gemini' : 'OpenRouter Gemma'}.</p>
+              <div className="text-center space-y-4 animate-pulse pt-10">
+                <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+                <p className="text-indigo-600 dark:text-indigo-400 font-bold text-xl">Consultando las Escrituras...</p>
+                <p className="text-sm text-slate-500">Esto puede tomar unos segundos usando {aiProvider === 'gemini' ? 'Google Gemini' : 'OpenRouter Gemma'}.</p>
               </div>
             )}
           </div>
@@ -234,18 +232,19 @@ const App: React.FC = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
-                      <h4 className="font-black text-[10px] text-indigo-500 uppercase mb-4 tracking-[0.2em]">Explicación</h4>
+                      <h4 className="font-black text-[10px] text-indigo-500 uppercase mb-4 tracking-[0.2em]">Explicación Teológica</h4>
                       <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300">{data.summary}</p>
                     </div>
                     <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
-                      <h4 className="font-black text-[10px] text-teal-500 uppercase mb-4 tracking-[0.2em]">Contexto</h4>
+                      <h4 className="font-black text-[10px] text-teal-500 uppercase mb-4 tracking-[0.2em]">Contexto Histórico</h4>
                       <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300">{data.historicalContext}</p>
                     </div>
                   </div>
 
-                  <div className="bg-indigo-600 text-white p-10 rounded-[3rem] shadow-2xl">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 opacity-80">Aplicación Diaria</h4>
-                    <p className="text-2xl font-serif italic leading-relaxed">"{data.practicalApplication}"</p>
+                  <div className="bg-indigo-600 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 text-8xl">🙏</div>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 opacity-80">Aplicación Práctica</h4>
+                    <p className="text-2xl font-serif italic leading-relaxed relative z-10">"{data.practicalApplication}"</p>
                   </div>
                   
                   <DailyGuide plan={data.dailyPlan} />
@@ -268,7 +267,7 @@ const App: React.FC = () => {
               }} 
             />
             <div className="mt-12 flex justify-center">
-              <Button onClick={() => setStatus('idle')} variant="outline" className="px-10 border-slate-300 text-slate-600">Crear otro plan</Button>
+              <Button onClick={() => setStatus('idle')} variant="outline" className="px-10 border-slate-300 text-slate-600">Volver al Inicio</Button>
             </div>
           </div>
         )}
@@ -292,7 +291,7 @@ const App: React.FC = () => {
       
       <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-2 text-slate-400">
         <p className="text-sm font-bold tracking-widest uppercase">Vida en la Palabra © 2025</p>
-        <p className="text-xs">Usa Gemini 3 Flash para una experiencia gratuita y estable.</p>
+        <p className="text-xs">Desarrollado con Gemini 3 Flash para un estudio bíblico gratuito y potente.</p>
       </footer>
     </div>
   );
