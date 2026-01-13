@@ -21,7 +21,7 @@ export const ReadingPlanView: React.FC<ReadingPlanViewProps> = ({ plan, onSelect
 
       <div className="grid gap-6">
         {plan.items.map((item, index) => (
-          <div key={index} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-6 items-center hover:shadow-md dark:hover:border-indigo-500 transition-all">
+          <div key={`item-${item.id}-${item.passage.replace(/\s+/g, '-')}`} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-6 items-center hover:shadow-md dark:hover:border-indigo-500 transition-all">
             <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 text-white font-bold transition-all ${
               plan.duration === 'intensive' ? 'bg-rose-500 dark:bg-rose-600' : 
               plan.duration === 'weekly' ? 'bg-indigo-600 dark:bg-indigo-700' :

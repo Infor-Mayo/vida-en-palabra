@@ -57,8 +57,8 @@ export const StreakCalendar: React.FC<{ stats: UserStats, onClose: () => void }>
   const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md max-h-[90vh] rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-y-auto animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
         <div className="bg-orange-500 p-8 text-center text-white relative">
           <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-all">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -76,8 +76,8 @@ export const StreakCalendar: React.FC<{ stats: UserStats, onClose: () => void }>
           </div>
 
           <div className="grid grid-cols-7 gap-1 text-center mb-2">
-            {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map(d => (
-              <span key={d} className="text-[10px] font-black text-slate-400 uppercase">{d}</span>
+            {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((d, i) => (
+              <span key={`${d}-${i}`} className="text-[10px] font-black text-slate-400 uppercase">{d}</span>
             ))}
           </div>
 
@@ -87,7 +87,7 @@ export const StreakCalendar: React.FC<{ stats: UserStats, onClose: () => void }>
               const day = i + 1;
               const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const isToday = new Date().toISOString().split('T')[0] === dateStr;
-              const hasStudied = stats.studyHistory.includes(dateStr);
+              const hasStudied = stats.studyHistory.some(h => h.date === dateStr);
               
               return (
                 <div 

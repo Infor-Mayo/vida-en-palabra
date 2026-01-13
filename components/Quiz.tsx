@@ -193,7 +193,7 @@ export const Quiz: React.FC<QuizProps> = ({
                 const isSelected = matchingState.left === p.left;
                 const pairInfo = getPairStyle(p.left);
                 return (
-                  <button key={i} disabled={isAnswered || isPaired} onClick={() => setMatchingState(prev => ({ ...prev, left: p.left }))} className={`w-full p-4 rounded-xl text-left border-2 transition-all flex items-center justify-between text-sm ${isSelected ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/40' : (isPaired && pairInfo) ? `${pairInfo.className}` : 'bg-slate-50 dark:bg-slate-800 border-transparent'}`}>
+                  <button key={`left-${p.left}`} disabled={isAnswered || isPaired} onClick={() => setMatchingState(prev => ({ ...prev, left: p.left }))} className={`w-full p-4 rounded-xl text-left border-2 transition-all flex items-center justify-between text-sm ${isSelected ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/40' : (isPaired && pairInfo) ? `${pairInfo.className}` : 'bg-slate-50 dark:bg-slate-800 border-transparent'}`}>
                     <span>{p.left}</span>
                     {(isPaired && pairInfo) && <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/50 text-[10px] font-black">{pairInfo.num}</span>}
                   </button>
@@ -207,7 +207,7 @@ export const Quiz: React.FC<QuizProps> = ({
                 const isPaired = !!partnerLeft;
                 const pairInfo = partnerLeft ? getPairStyle(partnerLeft) : undefined;
                 return (
-                  <button key={i} disabled={isAnswered || !matchingState.left || isPaired} onClick={() => { if (matchingState.left) setMatchingState(prev => ({ paired: { ...prev.paired, [prev.left!]: rightText }, left: null })); }} className={`w-full p-4 rounded-xl text-left border-2 transition-all flex items-center justify-between text-sm ${(isPaired && pairInfo) ? `${pairInfo.className}` : matchingState.left ? 'border-dashed border-indigo-300' : 'bg-slate-50 dark:bg-slate-800 border-transparent'}`}>
+                  <button key={`right-${rightText}`} disabled={isAnswered || !matchingState.left || isPaired} onClick={() => { if (matchingState.left) setMatchingState(prev => ({ paired: { ...prev.paired, [prev.left!]: rightText }, left: null })); }} className={`w-full p-4 rounded-xl text-left border-2 transition-all flex items-center justify-between text-sm ${(isPaired && pairInfo) ? `${pairInfo.className}` : matchingState.left ? 'border-dashed border-indigo-300' : 'bg-slate-50 dark:bg-slate-800 border-transparent'}`}>
                     <span>{rightText}</span>
                     {(isPaired && pairInfo) && <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/50 text-[10px] font-black">{pairInfo.num}</span>}
                   </button>
@@ -220,7 +220,7 @@ export const Quiz: React.FC<QuizProps> = ({
         {q.type === 'fill-in-the-blanks' && (
           <div className="bg-slate-50 dark:bg-slate-800 p-8 rounded-3xl text-lg leading-loose border border-slate-100 dark:border-slate-700">
             {(q.textWithBlanks || q.question || "").split(BLANK_REGEX).map((part, i, arr) => (
-              <React.Fragment key={i}>
+              <React.Fragment key={`fragment-${i}-${part.slice(0, 10)}`}>
                 {part}
                 {i < arr.length - 1 && (
                   <input 
@@ -245,7 +245,7 @@ export const Quiz: React.FC<QuizProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {displayOptions?.map((opt, idx) => (
                 <button 
-                  key={idx} 
+                  key={`tf-${opt}`} 
                   disabled={isAnswered} 
                   onClick={() => setSelectedIndices([idx])}
                   className={`p-8 rounded-[2rem] border-4 transition-all flex flex-col items-center justify-center gap-2 ${
@@ -262,7 +262,7 @@ export const Quiz: React.FC<QuizProps> = ({
         )}
 
         {(q.type === 'multiple-choice' || q.type === 'multiple-selection') && displayOptions?.map((opt, idx) => (
-          <button key={idx} disabled={isAnswered} onClick={() => { if (q.type === 'multiple-choice') setSelectedIndices([idx]); else setSelectedIndices(prev => selectedIndices.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]); }} className={`w-full mb-3 text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${selectedIndices.includes(idx) ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-transparent bg-slate-50 dark:bg-slate-800'}`}>
+          <button key={`mc-${opt}`} disabled={isAnswered} onClick={() => { if (q.type === 'multiple-choice') setSelectedIndices([idx]); else setSelectedIndices(prev => selectedIndices.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]); }} className={`w-full mb-3 text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${selectedIndices.includes(idx) ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-transparent bg-slate-50 dark:bg-slate-800'}`}>
             <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${selectedIndices.includes(idx) ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-700 text-slate-400'}`}>{String.fromCharCode(65 + idx)}</span>
             <span className="font-semibold text-sm">{opt}</span>
           </button>

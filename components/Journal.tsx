@@ -94,7 +94,7 @@ export const Journal: React.FC<JournalProps> = ({
     <div className="space-y-8">
       <h3 className="text-2xl font-serif text-indigo-900 dark:text-indigo-400 border-b dark:border-slate-800 pb-2 inline-block transition-colors">Tu Diario de Reflexión</h3>
       {prompts.map((prompt, idx) => (
-        <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all">
+        <div key={`prompt-${prompt.slice(0, 20)}`} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all">
           <label className="block text-lg font-medium text-slate-800 dark:text-slate-200 mb-4 transition-colors">{prompt}</label>
           <textarea
             value={journalAnswers[idx] || ""}

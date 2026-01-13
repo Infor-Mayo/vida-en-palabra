@@ -4,6 +4,22 @@ import { DevotionalData, ReadingPlan, PlanDuration, ModelType, QuizDifficulty } 
 import { callGemini } from "./geminiProvider";
 import { callGemma } from "./gemmaProvider";
 import { cleanJsonResponse, handleServiceError } from "./errorHandler";
+import { extractRelevantContext, extractRelevantContextStructured } from "./bibleSearch";
+
+// Importar textos bíblicos
+import at1 from '../data/1)atRV60.txt?raw';
+import at2 from '../data/2)atRV60.txt?raw';
+import at3 from '../data/3)atRV60.txt?raw';
+import nt from '../data/4)ntRV60.txt?raw';
+
+const BIBLE_TEXT = `${at1}\n${at2}\n${at3}\n${nt}`;
+
+export interface BibleSearchParams {
+  book: string;
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+}
 
 const FULL_DEVOTIONAL_SCHEMA = {
   type: Type.OBJECT,
@@ -102,11 +118,42 @@ export const generateDevotional = async (
   passage: string, 
   modelType: ModelType, 
   numQuestions: number = 5, 
-  difficulty: QuizDifficulty = 'medium'
+  difficulty: QuizDifficulty = 'medium',
+  searchParams?: BibleSearchParams
 ): Promise<DevotionalData> => {
   const isGemma = modelType === 'gemma';
   const systemPrompt = getSystemPrompt(numQuestions, difficulty, isGemma);
-  const userPrompt = `Genera un devocional para: "${passage}"`;
+  
+  // Extraer contexto relevante
+  let bibleContext = '';
+  
+  if (searchParams) {
+    bibleContext = extractRelevantContextStructured(
+      BIBLE_TEXT, 
+      searchParams.book, 
+      searchParams.chapter, 
+      searchParams.verseStart, 
+      searchParams.verseEnd
+    );
+  } else {
+    // Fallback a búsqueda antigua si no hay params estructurados (ej. desde un plan de lectura)
+    bibleContext = extractRelevantContext(BIBLE_TEXT, passage);
+  }
+  
+  let userPrompt = '';
+  
+  if (bibleContext) {
+      console.log(`[geminiService] Contexto bíblico encontrado (${bibleContext.length} chars). Usando en prompt.`);
+      userPrompt = `Base de Conocimiento Bíblico (RV60 - Fragmento Relevante):\n${bibleContext}\n\nINSTRUCCIÓN: Genera un devocional interactivo para el pasaje o tema: "${passage}".\nIMPORTANTE:\n1. Usa EXCLUSIVAMENTE el texto bíblico proporcionado arriba para el campo "passageText". Copialo literalmente.\n2. Usa el contexto proporcionado para generar las preguntas y reflexiones.\n3. Si el fragmento es muy largo, usa los versículos más relevantes pero mantén el texto fiel a la fuente proporcionada.`;
+  } else {
+      console.log(`[geminiService] NO se encontró contexto bíblico. Usando prompt genérico.`);
+      userPrompt = `Genera un devocional interactivo para el pasaje o tema: "${passage}". Usa la versión Reina Valera 1960.`;
+  }
+
+  // DEBUG: Mostrar el prompt en consola para verificar qué se está enviando
+  console.log("--- PROMPT ENVIADO A GEMINI ---");
+  console.log(userPrompt);
+  console.log("-------------------------------");
 
   try {
     let responseText: string;

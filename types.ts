@@ -59,13 +59,18 @@ export interface DevotionalData {
   dailyPlan: DailyPlanDay[];
 }
 
+export interface StudySession {
+  date: string;
+  passage: string;
+}
+
 export interface UserStats {
   streak: number;
   lastStudyDate: string | null;
-  studyHistory: string[]; 
+  studyHistory: StudySession[]; 
   emeralds: number;
   protectors: number;
   reminderTime: string | null;
 }
 
-export type AppStatus = 'idle' | 'loading' | 'content' | 'error' | 'viewing_plan' | 'loading_plan' | 'store' | 'calendar' | 'reminders';
+export type AppStatus = 'idle' | 'loading' | 'content' | 'error' | 'viewing_plan' | 'loading_plan' | 'store' | 'calendar' | 'reminders' | 'plans';

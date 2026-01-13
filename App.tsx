@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { generateDevotional, generateReadingPlan } from './services/geminiService';
+import { generateDevotional, generateReadingPlan, BibleSearchParams } from './services/geminiService';
+import { BIBLE_BOOKS_DATA } from './services/bibleMetadata';
 import { AppStatus, DevotionalData, ReadingPlan, PlanDuration, UserStats, ModelType, QuizDifficulty } from './types';
 import { Button } from './components/Button';
 import { Quiz } from './components/Quiz';
@@ -8,6 +9,7 @@ import { Journal } from './components/Journal';
 import { ReadingPlanView } from './components/ReadingPlanView';
 import { DailyGuide } from './components/DailyGuide';
 import { GamificationHeader, Store, StreakCalendar, ReminderSettings } from './components/Gamification';
+import { saveReadingPlan, listReadingPlans, getReadingPlan, deleteReadingPlan } from './services/planDb';
 
 const STATS_KEY = 'user_gamification_stats_v1';
 const THEME_KEY = 'app_theme_preference';
@@ -28,6 +30,14 @@ const DEFAULT_STATS: UserStats = {
 
 const App: React.FC = () => {
   const [input, setInput] = useState('');
+  
+  // Nuevos estados para selección bíblica
+  const [searchMode, setSearchMode] = useState<'passage' | 'topic'>('passage');
+  const [selectedBook, setSelectedBook] = useState(BIBLE_BOOKS_DATA[0].name);
+  const [selectedChapter, setSelectedChapter] = useState(1);
+  const [verseStart, setVerseStart] = useState<string>('');
+  const [verseEnd, setVerseEnd] = useState<string>('');
+
   const [status, setStatus] = useState<AppStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [data, setData] = useState<DevotionalData | null>(null);
@@ -35,6 +45,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'study' | 'quiz' | 'journal'>('study');
   const [planTopic, setPlanTopic] = useState('');
   const [planDuration, setPlanDuration] = useState<PlanDuration>('weekly');
+  const [savedPlans, setSavedPlans] = useState<Array<{id:string; title:string; duration:PlanDuration; topic:string; created_at:string}>>([]);
   
   const [difficulty, setDifficulty] = useState<QuizDifficulty>(() => (localStorage.getItem(DIFFICULTY_KEY) as QuizDifficulty) || 'medium');
   const [numQuestions, setNumQuestions] = useState<number>(() => Number(localStorage.getItem(NUM_QUESTIONS_KEY)) || 5);
@@ -43,6 +54,7 @@ const App: React.FC = () => {
   
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [journalAnswers, setJournalAnswers] = useState<Record<number, string>>({});
+  const [duplicateWarning, setDuplicateWarning] = useState('');
   const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
 
   const [stats, setStats] = useState<UserStats>(() => {
@@ -50,8 +62,14 @@ const App: React.FC = () => {
       const saved = localStorage.getItem(STATS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Mezclamos con DEFAULT_STATS para asegurar que nuevas propiedades como studyHistory existan
-        return { ...DEFAULT_STATS, ...parsed, studyHistory: parsed.studyHistory || [] };
+        // Migración: Si el historial es de strings (versión anterior), convertirlo
+        let history = parsed.studyHistory || [];
+        if (history.length > 0 && typeof history[0] === 'string') {
+            history = history.map((date: string) => ({ date, passage: 'Estudio previo' }));
+        }
+        
+        // Mezclamos con DEFAULT_STATS para asegurar que nuevas propiedades existan
+        return { ...DEFAULT_STATS, ...parsed, studyHistory: history };
       }
     } catch (e) {
       console.error("Error al cargar stats:", e);
@@ -118,7 +136,20 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async (passageStr?: string) => {
-    const targetPassage = passageStr || input;
+    // Determinar el pasaje objetivo y los parámetros
+    let targetPassage = passageStr || input;
+    let searchParams: BibleSearchParams | undefined;
+
+    if (!passageStr && searchMode === 'passage') {
+       targetPassage = `${selectedBook} ${selectedChapter}${verseStart ? `:${verseStart}` : ''}${verseEnd ? `-${verseEnd}` : ''}`;
+       searchParams = {
+         book: selectedBook,
+         chapter: selectedChapter,
+         verseStart: verseStart ? parseInt(verseStart) : undefined,
+         verseEnd: verseEnd ? parseInt(verseEnd) : undefined
+       };
+    }
+
     if (!targetPassage.trim()) return;
 
     setErrorMessage('');
@@ -128,7 +159,7 @@ const App: React.FC = () => {
     setCurrentQuizIdx(0);
     
     try {
-      const result = await generateDevotional(targetPassage, modelType, numQuestions, difficulty);
+      const result = await generateDevotional(targetPassage, modelType, numQuestions, difficulty, searchParams);
       setData(result);
       setStatus('content');
       setActiveTab('study');
@@ -141,7 +172,7 @@ const App: React.FC = () => {
     }
   };
 
-  const isModalOpen = ['store', 'calendar', 'reminders'].includes(status);
+  const isModalOpen = ['store', 'calendar', 'reminders', 'plans'].includes(status);
   const showContent = (status === 'content' || isModalOpen) && data !== null;
   const showReadingPlan = (status === 'viewing_plan' || isModalOpen) && planData !== null && !showContent;
   const showHome = !showContent && !showReadingPlan;
@@ -223,7 +254,84 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Introduce un pasaje bíblico o un tema (Ej: Salmo 23 o 'La paz de Dios')..." className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all focus:bg-white dark:focus:bg-slate-900 mb-4" />
+                <div className="mb-6">
+                  <div className="flex gap-2 mb-4 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
+                    <button 
+                      onClick={() => setSearchMode('passage')}
+                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${searchMode === 'passage' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}
+                    >
+                      📖 Pasaje
+                    </button>
+                    <button 
+                      onClick={() => setSearchMode('topic')}
+                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${searchMode === 'topic' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500'}`}
+                    >
+                      💡 Tema
+                    </button>
+                  </div>
+
+                  {searchMode === 'passage' ? (
+                    <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Libro</label>
+                        <select 
+                          value={selectedBook} 
+                          onChange={(e) => {
+                             setSelectedBook(e.target.value);
+                             setSelectedChapter(1); // Resetear capítulo
+                             setVerseStart('');
+                             setVerseEnd('');
+                          }}
+                          className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-sm font-bold cursor-pointer"
+                        >
+                          {BIBLE_BOOKS_DATA.map(book => (
+                            <option key={book.name} value={book.name}>{book.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="flex gap-3">
+                        <div className="flex-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Capítulo</label>
+                          <select 
+                            value={selectedChapter} 
+                            onChange={(e) => setSelectedChapter(Number(e.target.value))}
+                            className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-sm font-bold cursor-pointer"
+                          >
+                            {Array.from({length: BIBLE_BOOKS_DATA.find(b => b.name === selectedBook)?.chapters || 1}, (_, i) => i + 1).map(num => (
+                              <option key={num} value={num}>{num}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div className="flex-[1.5]">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Versículos (Opcional)</label>
+                           <div className="flex items-center gap-2">
+                             <input 
+                               type="number" 
+                               placeholder="1" 
+                               min="1"
+                               value={verseStart} 
+                               onChange={(e) => setVerseStart(e.target.value)}
+                               className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-sm font-bold text-center"
+                             />
+                             <span className="text-slate-400 font-bold">-</span>
+                             <input 
+                               type="number" 
+                               placeholder="Fin" 
+                               min="1"
+                               value={verseEnd} 
+                               onChange={(e) => setVerseEnd(e.target.value)}
+                               className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-indigo-500 text-sm font-bold text-center"
+                             />
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Introduce un tema (Ej: 'La paz de Dios' o 'Ansiedad')..." className="w-full p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 outline-none focus:border-indigo-500 min-h-[140px] transition-all focus:bg-white dark:focus:bg-slate-900" />
+                  )}
+                </div>
                 
                 {errorMessage && (
                   <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-900/30 rounded-2xl text-red-700 dark:text-red-400 text-xs animate-in shake">
@@ -232,7 +340,12 @@ const App: React.FC = () => {
                   </div>
                 )}
                 
-                <Button className="mt-6 w-full py-4 text-lg" onClick={() => handleGenerate()} disabled={!input.trim() || status === 'loading'} isLoading={status === 'loading'}>
+                <Button 
+                  className="mt-6 w-full py-4 text-lg" 
+                  onClick={() => handleGenerate()} 
+                  disabled={status === 'loading' || (searchMode === 'topic' && !input.trim())} 
+                  isLoading={status === 'loading'}
+                >
                   Generar Devocional
                 </Button>
               </div>
@@ -246,6 +359,13 @@ const App: React.FC = () => {
                   <div className="space-y-4">
                     <p className="text-xs text-slate-400">¿Quieres un plan para varios días? Introduce un tema y te daremos una ruta de lectura.</p>
                     <input type="text" value={planTopic} onChange={(e) => setPlanTopic(e.target.value)} placeholder="Ej: Superar el miedo, Matrimonio..." className="w-full p-4 rounded-xl bg-white/10 border border-white/10 text-white outline-none focus:ring-2 focus:ring-teal-400" />
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['intensive','weekly','monthly','annual'] as PlanDuration[]).map(d => (
+                        <button key={d} onClick={() => setPlanDuration(d)} className={`py-2 rounded-xl text-[10px] font-black uppercase ${planDuration === d ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-300'}`}>
+                          {d === 'intensive' ? 'Intensivo' : d === 'weekly' ? 'Semanal' : d === 'monthly' ? 'Mensual' : 'Anual'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <Button variant="secondary" className="bg-teal-400 text-slate-900 py-4 w-full mt-6" onClick={async () => {
@@ -255,18 +375,28 @@ const App: React.FC = () => {
                     setPlanData(p);
                     setStatus('viewing_plan');
                   } catch (e: any) { setErrorMessage(e.message); setStatus('error'); }
-                }} disabled={!planTopic.trim() || status === 'loading_plan'} isLoading={status === 'loading_plan'}>Crear Plan Semanal</Button>
+                }} disabled={!planTopic.trim() || status === 'loading_plan'} isLoading={status === 'loading_plan'}>Crear Plan</Button>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button variant="outline" className="bg-white/10 text-white border-white/20" onClick={async () => { const list = await listReadingPlans(); setSavedPlans(list as any); setStatus('plans'); }}>Mis Planes</Button>
+                  <Button variant="outline" className="bg-white/10 text-white border-white/20" onClick={() => { if (planData) saveReadingPlan(planData, planTopic).then(() => {}); }}>Guardar Actual</Button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {showContent && data && (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
-             <div className="text-center">
-               <h2 className="text-5xl font-serif font-bold leading-tight">{data.title}</h2>
-               <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-xs mt-3">{data.keyVerses?.[0] || input}</p>
-            </div>
+                  <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                     <div className="text-center">
+                       {duplicateWarning && (
+                         <div className="mb-6 mx-auto max-w-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 flex items-center gap-3 text-amber-800 dark:text-amber-200 shadow-sm animate-pulse">
+                           <span className="text-xl">⚠️</span>
+                           <p className="text-xs font-bold uppercase tracking-wide">{duplicateWarning}</p>
+                         </div>
+                       )}
+                       <h2 className="text-5xl font-serif font-bold leading-tight">{data.title}</h2>
+                       <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em] text-xs mt-3">{data.keyVerses?.[0] || input}</p>
+                    </div>
             
             <div className="flex justify-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-[1.25rem] max-w-sm mx-auto shadow-inner sticky top-20 z-40">
               {['study', 'quiz', 'journal'].map(tab => (
@@ -316,6 +446,36 @@ const App: React.FC = () => {
       {status === 'store' && <Store stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onBuyProtector={() => { if (stats.emeralds >= 50) setStats(prev => ({...prev, emeralds: (prev.emeralds || 0) - 50, protectors: (prev.protectors || 0) + 1})); }} />}
       {status === 'calendar' && <StreakCalendar stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} />}
       {status === 'reminders' && <ReminderSettings stats={stats} onClose={() => setStatus(data ? 'content' : 'idle')} onSetReminder={(time) => setStats(prev => ({...prev, reminderTime: time}))} />}
+      {status === 'plans' && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setStatus('idle')}>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg max-h-[85vh] rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-y-auto animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-black uppercase tracking-widest">Mis Planes</h3>
+                <button onClick={() => setStatus('idle')} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">✖</button>
+              </div>
+              {savedPlans.length === 0 ? (
+                <p className="text-sm text-slate-500">No tienes planes guardados.</p>
+              ) : (
+                <div className="space-y-3">
+                  {savedPlans.map(sp => (
+                    <div key={sp.id} className="flex items-center justify-between p-3 rounded-xl border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                      <div>
+                        <p className="font-bold text-slate-800 dark:text-slate-100">{sp.title}</p>
+                        <p className="text-[10px] uppercase text-slate-500">Tema: {sp.topic} · {sp.duration}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" onClick={async () => { const p = await getReadingPlan(sp.id); if (p) { setPlanData(p); setStatus('viewing_plan'); } }}>Abrir</Button>
+                        <Button variant="outline" onClick={async () => { await deleteReadingPlan(sp.id); const list = await listReadingPlans(); setSavedPlans(list as any); }}>Eliminar</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="mt-20 py-10 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 relative z-10">
         <p className="text-sm font-bold tracking-widest uppercase">Vida en la Palabra © 2025</p>
